@@ -1,0 +1,11 @@
+rfq_id,supplier_name,part_description,quote_date,quoted_price,lead_time_weeks,notes
+RFQ-DEMO-001,APEX MFG,Pneumatic Damper 36 inch,2021-11-14,261.52,11,Demo scenario SC-001 (tier 1)
+RFQ-DEMO-002,apex manufacturing inc,Pneumatic Damper 36 inch,2021-12-12,202.23,5,Demo scenario SC-002 (tier 1)
+RFQ-DEMO-003,stellar metalworks,Temperature Sensor Probe,2021-12-12,82.46,9,Demo scenario SC-004 (tier 1)
+RFQ-DEMO-004,TitanForge,Temperature Sensor Probe,2021-11-28,84.4,3,Demo scenario SC-005 (tier 1)
+RFQ-DEMO-005,Precision Thermal Company,Heavy Duty Mount,2021-11-10,28.94,7,Demo scenario SC-007 (tier 1)
+RFQ-DEMO-006,Quik-Fab Industries,Heavy Duty Bearing Set,2021-11-25,119.8,10,Demo scenario SC-010 (tier 2)
+RFQ-DEMO-007,AeroFlow Technologies,Temperature Sensor Probe,2024-02-19,57.17,5,Demo scenario SC-011 (tier 2)
+RFQ-DEMO-008,Apex-QuickFab Industries,36 inch Axial Fan,2024-08-09,213.76,9,Demo scenario SC-020 (tier 3)
+RFQ-DEMO-009,Apex Manufacturing - QuickFab Division,Pneumatic Damper 36 inch,2024-07-28,383.18,6,Demo scenario SC-022 (tier 3)
+RFQ-DEMO-010,Zenith Thermal,Pneumatic Damper 36 inch,2025-01-07,414.34,10,Demo scenario SC-032 (tier 4)

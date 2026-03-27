@@ -1,0 +1,169 @@
+metadata:
+  generated: "2026-03-27"
+  description: "Ground truth for entity resolution benchmarking"
+
+scenarios:
+  # --- Tier 1: Easy (abbreviation, case, legal suffix) ---
+  - id: SC-001
+    difficulty: 1
+    category: abbreviation
+    input_name: "APEX MFG"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Standard abbreviation"
+
+  - id: SC-002
+    difficulty: 1
+    category: case_variation
+    input_name: "apex manufacturing inc"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Lowercase with legal suffix"
+
+  - id: SC-003
+    difficulty: 1
+    category: abbreviation
+    input_name: "QUICKFAB IND"
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Abbreviation of Industries"
+
+  - id: SC-004
+    difficulty: 1
+    category: case_variation
+    input_name: "stellar metalworks"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "Lowercase"
+
+  - id: SC-005
+    difficulty: 1
+    category: legal_suffix
+    input_name: "TitanForge"
+    expected_canonical: "TitanForge LLC"
+    requires_ma_registry: false
+    description: "Missing legal suffix"
+
+  - id: SC-006
+    difficulty: 1
+    category: abbreviation
+    input_name: "AEROFLOW SYS"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: false
+    description: "Abbreviation of Systems"
+
+  - id: SC-007
+    difficulty: 1
+    category: case_variation
+    input_name: "Precision Thermal Company"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: false
+    description: "Co expanded to Company"
+
+  # --- Tier 2: Medium (typos, partial overlap, simple M&A) ---
+  - id: SC-010
+    difficulty: 2
+    category: typo
+    input_name: "Quik-Fab Industries"
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Misspelling with hyphen"
+
+  - id: SC-011
+    difficulty: 2
+    category: restructure
+    input_name: "AeroFlow Technologies"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: true
+    ma_event: "ma-8ff802"
+    description: "Post-restructure, high token overlap"
+
+  - id: SC-012
+    difficulty: 2
+    category: restructure
+    input_name: "AeroFlow Tech"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: true
+    ma_event: "ma-8ff802"
+    description: "Abbreviated restructure name"
+
+  - id: SC-013
+    difficulty: 2
+    category: typo
+    input_name: "Stellr Metalworks"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "Missing letter"
+
+  - id: SC-014
+    difficulty: 2
+    category: typo
+    input_name: "Titan Forge LLC"
+    expected_canonical: "TitanForge LLC"
+    requires_ma_registry: false
+    description: "Extra space in compound name"
+
+  # --- Tier 3: Hard (M&A with partial token overlap) ---
+  - id: SC-020
+    difficulty: 3
+    category: post_acquisition
+    input_name: "Apex-QuickFab Industries"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Compound acquisition name"
+
+  - id: SC-021
+    difficulty: 3
+    category: post_merger
+    input_name: "StellarForge Industries"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: true
+    ma_event: "ma-81cb6c"
+    description: "Merger product name"
+
+  - id: SC-022
+    difficulty: 3
+    category: post_acquisition
+    input_name: "Apex Manufacturing - QuickFab Division"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Division-style acquisition name"
+
+  - id: SC-023
+    difficulty: 3
+    category: post_merger
+    input_name: "SF Industries"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: true
+    ma_event: "ma-81cb6c"
+    description: "Abbreviated merger name"
+
+  # --- Tier 4: Adversarial (zero overlap, M&A only) ---
+  - id: SC-030
+    difficulty: 4
+    category: full_rebrand
+    input_name: "Zenith Thermal Solutions"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: true
+    ma_event: "ma-e17890"
+    description: "Complete rebrand, zero token overlap"
+
+  - id: SC-031
+    difficulty: 4
+    category: acronym_rebrand
+    input_name: "AQF Holdings"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Acronym of merged entity"
+
+  - id: SC-032
+    difficulty: 4
+    category: full_rebrand
+    input_name: "Zenith Thermal"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: true
+    ma_event: "ma-e17890"
+    description: "Abbreviated rebrand name"

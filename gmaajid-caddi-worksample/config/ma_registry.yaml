@@ -1,0 +1,85 @@
+entities:
+- id: f62f8d
+  name: Apex Manufacturing
+  friendly: apex-mfg
+  divisions:
+  - f62f8d:785c98
+  - f62f8d:d2e7fe
+  - f62f8d:551a66
+- id: 579fb7
+  name: QuickFab Industries
+  friendly: quickfab
+- id: '928136'
+  name: Precision Thermal Co
+  friendly: precision-thermal
+- id: ef731c
+  name: Stellar Metalworks
+  friendly: stellar
+- id: 215b97
+  name: TitanForge LLC
+  friendly: titanforge
+- id: c6354d
+  name: AeroFlow Systems
+  friendly: aeroflow
+- id: 785c98
+  name: Bright Star Foundrys
+  friendly: bright-star
+  parent: f62f8d
+- id: d2e7fe
+  name: Juniper Racing Parts
+  friendly: juniper-racing
+  parent: f62f8d
+- id: 551a66
+  name: Knight Fastener Fabrication Services
+  friendly: knight-fastener
+  parent: f62f8d
+events:
+- id: ma-1c52b8
+  type: acquisition
+  date: '2024-07-15'
+  acquirer: f62f8d
+  acquired: 579fb7
+  resulting_names:
+  - name: Apex-QuickFab Industries
+    first_seen: '2024-08-01'
+  - name: AQF Holdings
+    first_seen: '2024-09-15'
+  - name: Apex Manufacturing - QuickFab Division
+    first_seen: '2024-08-01'
+  notes: QuickFab absorbed into Apex supply division
+- id: ma-e17890
+  type: rebrand
+  date: '2025-01-01'
+  acquirer: '928136'
+  acquired: '928136'
+  resulting_names:
+  - name: Zenith Thermal Solutions
+    first_seen: '2025-01-15'
+  - name: Zenith Thermal
+    first_seen: '2025-02-01'
+  notes: Full rebrand, zero token overlap with original
+- id: ma-81cb6c
+  type: merger
+  date: '2023-06-01'
+  acquirer: ef731c
+  acquired: 215b97
+  resulting_names:
+  - name: StellarForge Industries
+    first_seen: '2023-07-01'
+  - name: SF Industries
+    first_seen: '2023-08-01'
+  co_merged:
+  - ef731c
+  - 215b97
+  notes: Equal merger of Stellar Metalworks and TitanForge
+- id: ma-8ff802
+  type: restructure
+  date: '2024-01-15'
+  acquirer: c6354d
+  acquired: c6354d
+  resulting_names:
+  - name: AeroFlow Technologies
+    first_seen: '2024-02-01'
+  - name: AeroFlow Tech
+    first_seen: '2024-03-01'
+  notes: Corporate restructuring, same ownership
