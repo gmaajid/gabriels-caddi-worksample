@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 from src.ma_registry import MARegistry
+from src.supplier_clustering import tokenize_company, _strip_legal_suffixes
 
 
 @dataclass
@@ -29,6 +30,7 @@ class MAResolver:
 
     def _build_index(self) -> None:
         self._name_to_events: dict[str, list[dict]] = {}
+        self._normalized_to_events: dict[str, list[dict]] = {}
         for event in self.registry.events:
             for rn in event.get("resulting_names", []):
                 name = rn["name"]
@@ -36,9 +38,51 @@ class MAResolver:
                     "event": event,
                     "first_seen": rn.get("first_seen"),
                 })
+                # Normalized form for fuzzy matching
+                normalized = _strip_legal_suffixes(name).strip().lower()
+                self._normalized_to_events.setdefault(normalized, []).append({
+                    "event": event,
+                    "first_seen": rn.get("first_seen"),
+                    "original_name": name,
+                })
+
+    def _fuzzy_match(self, name: str) -> list[dict]:
+        """Fuzzy match against resulting_names using token overlap."""
+        input_tokens = tokenize_company(name)
+        if not input_tokens:
+            return []
+
+        best_match = None
+        best_score = 0.0
+
+        for rn_name, entries in self._name_to_events.items():
+            rn_tokens = tokenize_company(rn_name)
+            if not rn_tokens:
+                continue
+            overlap = len(input_tokens & rn_tokens)
+            union = len(input_tokens | rn_tokens)
+            if union == 0:
+                continue
+            score = overlap / union
+            if score > best_score and score >= 0.5:  # Must have >=50% Jaccard
+                best_score = score
+                best_match = entries
+
+        return best_match or []
 
     def resolve(self, name: str, order_date: str) -> ResolutionResult:
+        # Try exact match first
         matches = self._name_to_events.get(name, [])
+
+        # Try normalized match
+        if not matches:
+            normalized = _strip_legal_suffixes(name).strip().lower()
+            matches = self._normalized_to_events.get(normalized, [])
+
+        # Try token-based fuzzy match
+        if not matches:
+            matches = self._fuzzy_match(name)
+
         if not matches:
             return ResolutionResult(resolved=False)
 
