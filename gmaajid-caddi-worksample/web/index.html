@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CADDi Supply Chain — Entity Graph</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <nav id="topbar">
+            <h1>CADDi Entity Resolution</h1>
+            <div id="nav-tabs">
+                <button class="tab active" data-tab="graph">Graph</button>
+                <button class="tab" data-tab="tutorials">Tutorials</button>
+                <button class="tab" data-tab="alerts">Alerts</button>
+            </div>
+        </nav>
+        <div id="main">
+            <div id="sidebar">
+                <div id="filters" class="sidebar-section">
+                    <h3>Filters</h3>
+                    <label>Source:
+                        <select id="source-filter">
+                            <option value="all">All</option>
+                            <option value="clustering">Clustering</option>
+                            <option value="ma">M&A Registry</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="division">Division</option>
+                        </select>
+                    </label>
+                    <label>Search:
+                        <input id="search" type="text" placeholder="Type a name...">
+                    </label>
+                </div>
+                <div id="detail-panel" class="sidebar-section">
+                    <h3>Details</h3>
+                    <div id="detail-content"><em>Click a node or edge</em></div>
+                </div>
+                <div id="legend" class="sidebar-section">
+                    <h3>Legend</h3>
+                    <div class="legend-item"><span class="dot canonical"></span> Canonical</div>
+                    <div class="legend-item"><span class="dot variant"></span> Variant</div>
+                    <div class="legend-item"><span class="dot ma-resulting"></span> M&A Result</div>
+                    <div class="legend-item"><span class="dot division"></span> Division</div>
+                    <div class="legend-item"><span class="line clustering"></span> Clustering</div>
+                    <div class="legend-item"><span class="line ma-edge"></span> M&A Event</div>
+                    <div class="legend-item"><span class="line division-edge"></span> Division</div>
+                </div>
+            </div>
+            <div id="content">
+                <div id="graph-view" class="view active">
+                    <svg id="graph"></svg>
+                </div>
+                <div id="tutorials-view" class="view">
+                    <div id="tutorial-list"></div>
+                </div>
+                <div id="alerts-view" class="view">
+                    <div id="alerts-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="graph.js"></script>
+</body>
+</html>

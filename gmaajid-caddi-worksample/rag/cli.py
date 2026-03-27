@@ -1172,5 +1172,167 @@ def demo_run():
             console.print(f"  {r.input_name} -> expected '{r.expected_canonical}', got '{r.resolved_canonical}' ({status}, tier {r.difficulty})")
 
 
+@cli.command()
+@click.option("--port", default=8080, help="Port for the web server")
+@click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
+def viz(port, no_browser):
+    """Launch the web visualization of the entity graph.
+
+    Starts a local web server serving the interactive D3.js graph.
+    Shows supplier name relationships, confidence scores, M&A chains,
+    and guided tutorials.
+
+    Example:
+        caddi-cli viz
+        caddi-cli viz --port 9090
+        caddi-cli viz --no-browser
+    """
+    import http.server
+    import json
+    import threading
+    import webbrowser
+
+    from rag.config import WEB_DIR
+
+    # Build graph data
+    graph_data = _build_viz_data()
+
+    class GraphHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(WEB_DIR), **kwargs)
+
+        def do_GET(self):
+            if self.path == "/api/graph":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps(graph_data).encode())
+            else:
+                super().do_GET()
+
+        def log_message(self, format, *args):
+            pass  # Suppress request logs
+
+    console.print(f"[green]Starting visualization server on port {port}...[/green]")
+    console.print(f"  Graph: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges")
+    console.print(f"  Alerts: {len(graph_data.get('alerts', []))}")
+    console.print(f"\n  Open: [bold cyan]http://localhost:{port}[/bold cyan]")
+    console.print("  Press Ctrl+C to stop.\n")
+
+    if not no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+
+    server = http.server.HTTPServer(("", port), GraphHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\n[dim]Server stopped.[/dim]")
+
+
+def _build_viz_data():
+    """Build JSON data for the web visualization."""
+    import pandas as pd
+    from src.ma_registry import MARegistry
+    from src.supplier_clustering import ClusterMethod, cluster_names, compute_edge_scores
+    from src.human_review import apply_human_overrides, load_confirmed_scores
+    from src.chain_validator import validate_registry
+    from rag.config import MA_REGISTRY_PATH, CONFIRMED_MAPPINGS_PATH, DATA_DIR
+
+    all_names = []
+    for csv_file in sorted(DATA_DIR.glob("*.csv")):
+        df = pd.read_csv(csv_file)
+        if "supplier_name" in df.columns:
+            all_names.extend(df["supplier_name"].tolist())
+
+    # Also include demo data if it exists
+    demo_dir = DATA_DIR / "demo"
+    if demo_dir.exists():
+        for csv_file in sorted(demo_dir.glob("*.csv")):
+            df = pd.read_csv(csv_file)
+            if "supplier_name" in df.columns:
+                all_names.extend(df["supplier_name"].tolist())
+
+    nodes = []
+    edges = []
+    node_ids = set()
+
+    if all_names:
+        clusters = cluster_names(all_names, method=ClusterMethod.PIPELINE)
+        clusters = apply_human_overrides(clusters, confirmed_path=CONFIRMED_MAPPINGS_PATH)
+        confirmed_scores = load_confirmed_scores(CONFIRMED_MAPPINGS_PATH)
+        edge_scores = compute_edge_scores(clusters, confirmed_scores=confirmed_scores)
+
+        for canonical, members in clusters.items():
+            if canonical not in node_ids:
+                nodes.append({"id": canonical, "type": "canonical", "count": all_names.count(canonical)})
+                node_ids.add(canonical)
+
+            for variant in members:
+                if variant == canonical:
+                    continue
+                if variant not in node_ids:
+                    nodes.append({"id": variant, "type": "variant", "count": all_names.count(variant)})
+                    node_ids.add(variant)
+
+                scores = edge_scores.get(canonical, {}).get(variant, {})
+                edges.append({
+                    "source": variant, "target": canonical,
+                    "type": "clustering",
+                    "jaccard": scores.get("jaccard", 0),
+                    "embedding": scores.get("embedding", 0),
+                    "combined": scores.get("combined", 0),
+                    "source_type": scores.get("source", "auto"),
+                })
+
+    # M&A edges
+    reg = MARegistry(path=MA_REGISTRY_PATH) if MA_REGISTRY_PATH.exists() else None
+    alerts = []
+    if reg:
+        alerts = validate_registry(reg, check_orphans_against_data=False)
+
+        for event in reg.events:
+            acq = reg.get_entity(event["acquirer"])
+            acd = reg.get_entity(event["acquired"])
+            if not acq:
+                continue
+
+            for rn in event.get("resulting_names", []):
+                rn_name = rn["name"]
+                if rn_name not in node_ids:
+                    nodes.append({"id": rn_name, "type": "ma_resulting", "count": all_names.count(rn_name)})
+                    node_ids.add(rn_name)
+                if acq["name"] not in node_ids:
+                    nodes.append({"id": acq["name"], "type": "canonical", "count": all_names.count(acq["name"])})
+                    node_ids.add(acq["name"])
+                edges.append({
+                    "source": rn_name, "target": acq["name"],
+                    "type": "ma",
+                    "event_id": event["id"],
+                    "event_type": event["type"],
+                    "event_date": event["date"],
+                    "combined": 1.0,
+                })
+
+        # Division edges
+        for entity in reg.entities:
+            if entity.get("parent"):
+                parent = reg.get_entity(entity["parent"])
+                if parent:
+                    if entity["name"] not in node_ids:
+                        nodes.append({"id": entity["name"], "type": "division", "count": 0})
+                        node_ids.add(entity["name"])
+                    if parent["name"] not in node_ids:
+                        nodes.append({"id": parent["name"], "type": "canonical", "count": all_names.count(parent["name"])})
+                        node_ids.add(parent["name"])
+                    edges.append({
+                        "source": entity["name"], "target": parent["name"],
+                        "type": "division",
+                        "combined": 1.0,
+                    })
+
+    return {"nodes": nodes, "edges": edges, "alerts": alerts}
+
+
 if __name__ == "__main__":
     cli()
