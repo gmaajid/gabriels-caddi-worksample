@@ -1023,5 +1023,154 @@ def ma_validate():
         console.print(f"\n{len(errors)} errors, {len(warnings)} warnings, {len(infos)} info.")
 
 
+# --- Demo Commands ---
+
+@cli.group()
+def demo():
+    """Generate demo data, run benchmarks, view reports."""
+    pass
+
+
+@demo.command("generate")
+def demo_generate():
+    """Generate synthetic demo CSVs from M&A registry and test scenarios.
+
+    Reads config/ma_registry.yaml and config/test_scenarios.yaml,
+    creates data/demo/ with demo_orders.csv, demo_inspections.csv, demo_rfq.csv.
+
+    Example:
+        caddi-cli demo generate
+    """
+    from src.ma_registry import MARegistry
+    from src.demo_generator import generate_demo_data
+    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH, DEMO_DIR
+
+    if not MA_REGISTRY_PATH.exists():
+        console.print("[red]No M&A registry found. Run 'caddi-cli ma add' first.[/red]")
+        return
+    if not TEST_SCENARIOS_PATH.exists():
+        console.print("[red]No test scenarios found at config/test_scenarios.yaml[/red]")
+        return
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+    console.print(f"Reading ma_registry.yaml ({len(reg.events)} events)")
+
+    files = generate_demo_data(
+        registry=reg,
+        scenarios_path=TEST_SCENARIOS_PATH,
+        output_dir=DEMO_DIR,
+    )
+
+    console.print("[green]Generated:[/green]")
+    for name, path in files.items():
+        import pandas as pd
+        df = pd.read_csv(path)
+        console.print(f"  {path} ({len(df)} rows)")
+
+
+@demo.command("run")
+def demo_run():
+    """Run the full resolution pipeline on demo data and report metrics.
+
+    Resolves all demo supplier names using the three-stage pipeline
+    (clustering -> M&A registry -> human escalation) and compares
+    against ground truth from test_scenarios.yaml.
+
+    Example:
+        caddi-cli demo run
+    """
+    from src.ma_registry import MARegistry
+    from src.ma_resolver import MAResolver
+    from src.demo_generator import load_test_scenarios
+    from src.benchmark import BenchmarkResult, compute_metrics
+    from src.supplier_clustering import ClusterMethod, cluster_names
+    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH
+
+    if not TEST_SCENARIOS_PATH.exists():
+        console.print("[red]No test scenarios. Run 'caddi-cli demo generate' first.[/red]")
+        return
+
+    scenarios = load_test_scenarios(TEST_SCENARIOS_PATH)
+    console.print(f"Resolving {len(scenarios)} test scenarios...\n")
+
+    # Set up resolver
+    reg = MARegistry(path=MA_REGISTRY_PATH) if MA_REGISTRY_PATH.exists() else None
+    resolver = MAResolver(reg) if reg else None
+
+    # Collect all input names for clustering
+    all_names = [sc["input_name"] for sc in scenarios]
+    canonical_names = list(set(sc["expected_canonical"] for sc in scenarios))
+    cluster_input = all_names + canonical_names
+
+    clusters = cluster_names(cluster_input, method=ClusterMethod.PIPELINE)
+    lookup = {}
+    for canonical, variants in clusters.items():
+        for v in variants:
+            lookup[v] = canonical
+
+    results = []
+    for sc in scenarios:
+        name = sc["input_name"]
+        expected = sc["expected_canonical"]
+        difficulty = sc["difficulty"]
+        category = sc.get("category", "")
+
+        # Stage 1: clustering
+        cluster_result = lookup.get(name)
+        if cluster_result and cluster_result == expected:
+            results.append(BenchmarkResult(
+                name, expected, cluster_result, True, difficulty, category, "clustering"))
+            continue
+
+        # Stage 2: M&A resolver
+        if resolver:
+            ma_result = resolver.resolve(name, "2026-01-01")
+            if ma_result.resolved:
+                results.append(BenchmarkResult(
+                    name, expected, ma_result.canonical, True, difficulty, category, "ma_registry"))
+                continue
+
+        # Stage 3: unresolved
+        resolved_name = cluster_result if cluster_result else None
+        was_resolved = resolved_name is not None
+        results.append(BenchmarkResult(
+            name, expected, resolved_name, was_resolved, difficulty, category, "unresolved"))
+
+    metrics = compute_metrics(results)
+
+    # Display results
+    table = Table(title="Entity Resolution Results")
+    table.add_column("Difficulty", style="cyan")
+    table.add_column("Total", justify="right")
+    table.add_column("Resolved", justify="right")
+    table.add_column("Prec.", justify="right")
+    table.add_column("Recall", justify="right")
+    table.add_column("F1", justify="right")
+
+    tier_names = {1: "easy", 2: "medium", 3: "hard", 4: "advers"}
+    for tier in sorted(metrics["by_tier"].keys()):
+        m = metrics["by_tier"][tier]
+        label = f"{tier} ({tier_names.get(tier, '?')})"
+        table.add_row(
+            label, str(m["total"]), f"{m['correct']}/{m['total']}",
+            f"{m['precision']:.0%}", f"{m['recall']:.0%}", f"{m['f1']:.2f}")
+
+    table.add_section()
+    o = metrics["overall"]
+    table.add_row(
+        "[bold]Overall[/bold]", str(o["total"]), f"{o['correct']}/{o['total']}",
+        f"{o['precision']:.0%}", f"{o['recall']:.0%}", f"{o['f1']:.2f}")
+
+    console.print(table)
+
+    # Show unresolved
+    unresolved = [r for r in results if not r.was_resolved or r.resolved_canonical != r.expected_canonical]
+    if unresolved:
+        console.print(f"\n[yellow]Unresolved/incorrect ({len(unresolved)}):[/yellow]")
+        for r in unresolved:
+            status = "wrong" if r.was_resolved else "unresolved"
+            console.print(f"  {r.input_name} -> expected '{r.expected_canonical}', got '{r.resolved_canonical}' ({status}, tier {r.difficulty})")
+
+
 if __name__ == "__main__":
     cli()
