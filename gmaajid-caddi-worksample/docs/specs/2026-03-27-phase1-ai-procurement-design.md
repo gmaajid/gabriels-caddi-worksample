@@ -28,9 +28,14 @@
   - [8.1 Clustering Pipeline Integration](#81-clustering-pipeline-integration)
   - [8.2 RAG Integration](#82-rag-integration)
   - [8.3 Confirmed Mappings Interaction](#83-confirmed-mappings-interaction)
-- [9. Phased Implementation Plan](#9-phased-implementation-plan)
-- [10. Testing Strategy](#10-testing-strategy)
-- [11. Demo Walkthrough Script](#11-demo-walkthrough-script)
+- [9. Entity ID Scheme](#9-entity-id-scheme)
+  - [9.1 ID Format](#91-id-format)
+  - [9.2 Division Addressing](#92-division-addressing)
+  - [9.3 CLI Usage](#93-cli-usage)
+- [10. Deployment and Portability](#10-deployment-and-portability)
+- [11. Phased Implementation Plan](#11-phased-implementation-plan)
+- [12. Testing Strategy](#12-testing-strategy)
+- [13. Demo Walkthrough Script](#13-demo-walkthrough-script)
 
 ---
 
@@ -89,31 +94,83 @@ config/
 
 ### 3.2 M&A Registry Schema
 
-The M&A registry is a YAML file that records corporate events and the name changes they produce. Each event creates edges in the temporal name chain.
+The M&A registry uses **entity IDs** (short hashes with friendly names) rather than text strings as keys. This prevents key-matching failures from typos and keeps the YAML compact.
 
 ```yaml
 # config/ma_registry.yaml
 
+# --- Entity Registry ---
+# Every company, division, or post-M&A entity gets a unique ID.
+# IDs are auto-generated short hashes. Friendly names are for human use.
+# Divisions use <parent_id>:<child_id> addressing for guaranteed uniqueness.
+
+entities:
+  # --- Root companies ---
+  - id: e7f3a2
+    name: "Apex Manufacturing"
+    friendly: "apex-mfg"
+    divisions: [e7f3a2:b1c4d8, e7f3a2:d9e5f1, e7f3a2:a3b7c2]
+
+  - id: c3d4e5
+    name: "QuickFab Industries"
+    friendly: "quickfab"
+
+  - id: f8a1b9
+    name: "Precision Thermal Co"
+    friendly: "precision-thermal"
+
+  - id: a2c6d3
+    name: "Stellar Metalworks"
+    friendly: "stellar"
+
+  - id: d4e8f2
+    name: "TitanForge LLC"
+    friendly: "titanforge"
+
+  - id: c9a3b7
+    name: "AeroFlow Systems"
+    friendly: "aeroflow"
+
+  # --- Divisions (operationally independent, linked to parent) ---
+  - id: b1c4d8
+    name: "Bright Star Foundrys"
+    friendly: "bright-star"
+    parent: e7f3a2                        # Apex Manufacturing
+
+  - id: d9e5f1
+    name: "Juniper Racing Parts"
+    friendly: "juniper-racing"
+    parent: e7f3a2
+
+  - id: a3b7c2
+    name: "Knight Fastener Fabrication Services"
+    friendly: "knight-fastener"
+    parent: e7f3a2
+
+
+# --- M&A Events ---
+# All references use entity IDs, not text strings.
+
 events:
-  - id: MA-001
+  - id: ma-8f2a1b
     type: acquisition                     # acquisition | merger | rebrand | restructure
     date: "2024-07-15"
-    acquirer: "Apex Manufacturing"        # surviving/parent entity
-    acquired: "QuickFab Industries"       # entity being absorbed/renamed
-    resulting_names:                      # names that appear AFTER this event
+    acquirer: e7f3a2                      # Apex Manufacturing (entity ID)
+    acquired: c3d4e5                      # QuickFab Industries (entity ID)
+    resulting_names:
       - name: "Apex-QuickFab Industries"
-        first_seen: "2024-08-01"          # optional: when this variant first appeared
+        first_seen: "2024-08-01"
       - name: "AQF Holdings"
         first_seen: "2024-09-15"
       - name: "Apex Manufacturing - QuickFab Division"
         first_seen: "2024-08-01"
     notes: "QuickFab absorbed into Apex's supply division after Q2 earnings"
 
-  - id: MA-002
+  - id: ma-c4d5e6
     type: rebrand
     date: "2025-01-01"
-    acquirer: "Zenith Thermal Solutions"  # new name
-    acquired: "Precision Thermal Co"      # old name
+    acquirer: f8a1b9                      # reuses Precision Thermal's entity
+    acquired: f8a1b9                      # same entity, new name
     resulting_names:
       - name: "Zenith Thermal Solutions"
         first_seen: "2025-01-15"
@@ -121,13 +178,12 @@ events:
         first_seen: "2025-02-01"
     notes: "Full rebrand, zero token overlap with original name"
 
-  - id: MA-003
+  - id: ma-a1b2c3
     type: merger
     date: "2023-06-01"
-    acquirer: "StellarForge Industries"   # new combined entity
-    acquired: "Stellar Metalworks"        # one of the merged companies
-    co_merged:                            # optional: other parties in the merger
-      - "TitanForge LLC"
+    acquirer: a2c6d3                      # Stellar Metalworks (surviving entity ID)
+    acquired: d4e8f2                      # TitanForge LLC
+    co_merged: [a2c6d3, d4e8f2]           # entity IDs of all parties
     resulting_names:
       - name: "StellarForge Industries"
         first_seen: "2023-07-01"
@@ -135,11 +191,11 @@ events:
         first_seen: "2023-08-01"
     notes: "Equal merger of Stellar Metalworks and TitanForge"
 
-  - id: MA-004
+  - id: ma-e5f6a7
     type: restructure
     date: "2024-01-15"
-    acquirer: "AeroFlow Technologies"     # new corporate name
-    acquired: "AeroFlow Systems"          # old corporate name
+    acquirer: c9a3b7                      # AeroFlow Systems (same entity)
+    acquired: c9a3b7
     resulting_names:
       - name: "AeroFlow Technologies"
         first_seen: "2024-02-01"
@@ -149,9 +205,14 @@ events:
 ```
 
 **Design decisions:**
+- **Entity IDs are short hashes** (6 hex chars), auto-generated by `caddi-cli ma add`
+- **Friendly names** are human-readable slugs for CLI convenience (`apex-mfg` instead of `e7f3a2`)
+- **Division addressing** uses `<parent_id>:<child_id>` pairs for guaranteed uniqueness
+- **Divisions are operationally independent** — they keep their own canonical name for POs/RFQs but the parent relationship is tracked for aggregate analytics
+- **All M&A event references use entity IDs**, not text — if a company name has a typo fix, it changes in one place
 - `acquirer` is always the surviving/resulting entity — the canonical name chain root
 - `acquired` is the entity being absorbed, renamed, or transformed
-- `co_merged` supports multi-party mergers (optional)
+- `co_merged` supports multi-party mergers using entity ID lists
 - `resulting_names` with `first_seen` dates allow the system to validate temporal consistency
 - `type` is informational — the resolution logic treats all types the same (chain traversal)
 
@@ -625,7 +686,105 @@ If a confirmed mapping conflicts with an M&A event, the confirmed mapping wins a
 
 ---
 
-## 9. Phased Implementation Plan
+## 9. Entity ID Scheme
+
+### 9.1 ID Format
+
+Every entity gets two identifiers:
+- **`id`**: 6-character hex hash, auto-generated from `hashlib.sha256(name + timestamp)[:6]`
+- **`friendly`**: human-readable slug, auto-generated from name (`"Apex Manufacturing"` -> `"apex-mfg"`), editable
+
+IDs are immutable once created. Friendly names can be changed without breaking references.
+
+### 9.2 Division Addressing
+
+Divisions use composite keys: `<parent_id>:<child_id>`
+
+```
+e7f3a2              → Apex Manufacturing (root entity)
+e7f3a2:b1c4d8       → Bright Star Foundrys (Apex division)
+e7f3a2:d9e5f1       → Juniper Racing Parts (Apex division)
+```
+
+This guarantees uniqueness even if two parents have divisions with colliding short hashes (unlikely but handled). The parent entity stores its division list (`divisions: [e7f3a2:b1c4d8, ...]`), and each division stores its parent (`parent: e7f3a2`).
+
+**Division resolution behavior:**
+- POs and RFQs referencing "Bright Star Foundrys" resolve to canonical **"Bright Star Foundrys"** (not Apex)
+- The parent link is metadata for aggregate queries ("total Apex family spend")
+- `caddi-cli mappings` shows: `Bright Star Foundrys [division of Apex Manufacturing]`
+- The web graph renders division edges as thin solid lines labeled "division of"
+
+### 9.3 CLI Usage
+
+Both ID formats work interchangeably:
+```bash
+caddi-cli ma show e7f3a2                    # by hash
+caddi-cli ma show apex-mfg                  # by friendly name
+caddi-cli ma show e7f3a2:b1c4d8             # division by hash pair
+caddi-cli ma show apex-mfg:bright-star      # division by friendly pair
+```
+
+---
+
+## 10. Deployment and Portability
+
+The entire system must run from a single `docker build && docker run` with no external dependencies beyond Claude API (optional).
+
+### 10.1 Docker Image
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install -e ".[dev]" && \
+    python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+EXPOSE 8080
+ENTRYPOINT ["./caddi-cli"]
+```
+
+Key points:
+- **Embedding model pre-downloaded** at build time (no internet needed at runtime)
+- **ChromaDB is in-process** (no external database)
+- **Web visualization served** via built-in Python HTTP server on port 8080
+- **ANTHROPIC_API_KEY** is optional — RAG queries work without it (raw mode)
+
+### 10.2 Interviewer Quick Start
+
+```bash
+# Clone and run (2 commands)
+git clone https://github.com/gmaajid/gabriels-caddi-worksample.git
+cd gabriels-caddi-worksample
+
+# Option A: Docker (no Python needed)
+docker build -t caddi-demo .
+docker run -it -p 8080:8080 caddi-demo demo run
+
+# Option B: Local (Python 3.12+)
+make setup
+./caddi-cli ingest
+./caddi-cli demo run
+./caddi-cli viz              # opens browser to localhost:8080
+```
+
+### 10.3 What's in the Image
+
+Everything needed to rebuild:
+- Source code (`rag/`, `src/`, `caddi-cli`)
+- Data (`data/*.csv`, `data/demo/`)
+- Config (`config/`)
+- Docs (`docs/`)
+- Tests (`rag/tests/`, `src/tests/`)
+- Web app (`web/`)
+- Pre-downloaded embedding model (cached in image layer)
+
+What's NOT in the image:
+- `.venv/` (rebuilt by pip install)
+- `data/chroma_db/` (rebuilt by `caddi-cli ingest`)
+- `.env` (API key passed via `-e` flag or not needed)
+
+---
+
+## 11. Phased Implementation Plan
 
 ### Phase 1a: M&A Registry + CLI (foundation)
 
@@ -694,7 +853,7 @@ If a confirmed mapping conflicts with an M&A event, the confirmed mapping wins a
 
 ---
 
-## 10. Testing Strategy
+## 12. Testing Strategy
 
 ### Unit Tests
 
@@ -721,7 +880,7 @@ If a confirmed mapping conflicts with an M&A event, the confirmed mapping wins a
 
 ---
 
-## 11. Demo Walkthrough Script
+## 13. Demo Walkthrough Script
 
 **Target: 30-minute interview demo for Hoth Industries / CADDi**
 
