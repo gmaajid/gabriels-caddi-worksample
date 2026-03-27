@@ -802,5 +802,226 @@ def commit_review(review_id: str):
     subprocess.run(["git", "log", "--oneline", "-1"])
 
 
+# --- M&A Registry Commands ---
+
+@cli.group()
+def ma():
+    """Manage the M&A registry (entities, events, divisions)."""
+    pass
+
+
+@ma.command("list")
+def ma_list():
+    """List all entities and M&A events."""
+    from src.ma_registry import MARegistry
+    from rag.config import MA_REGISTRY_PATH
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+    entities = reg.list_entities()
+    events = reg.list_events()
+
+    if not entities and not events:
+        console.print("[dim]Registry is empty. Run 'caddi-cli ma add' to add entities.[/dim]")
+        return
+
+    if entities:
+        table = Table(title="Entities")
+        table.add_column("ID", style="cyan", width=8)
+        table.add_column("Name")
+        table.add_column("Friendly", style="dim")
+        table.add_column("Type")
+        for e in entities:
+            etype = "division" if e.get("parent") else "root"
+            if e.get("divisions"):
+                etype = f"root ({len(e['divisions'])} div)"
+            table.add_row(e["id"], e["name"], e.get("friendly", ""), etype)
+        console.print(table)
+
+    if events:
+        console.print()
+        table = Table(title="M&A Events")
+        table.add_column("ID", style="cyan")
+        table.add_column("Type")
+        table.add_column("Date")
+        table.add_column("Acquirer")
+        table.add_column("Acquired")
+        table.add_column("Names", justify="right")
+        for ev in events:
+            acq_entity = reg.get_entity(ev["acquirer"])
+            acd_entity = reg.get_entity(ev["acquired"])
+            acq_name = acq_entity["name"] if acq_entity else ev["acquirer"]
+            acd_name = acd_entity["name"] if acd_entity else ev["acquired"]
+            n_names = len(ev.get("resulting_names", []))
+            table.add_row(ev["id"], ev["type"], ev["date"], acq_name, acd_name, str(n_names))
+        console.print(table)
+
+
+@ma.command("add")
+@click.option("--type", "event_type", type=click.Choice(["acquisition", "merger", "rebrand", "restructure"]))
+@click.option("--date", "event_date", help="Event date (YYYY-MM-DD)")
+@click.option("--acquirer", help="Acquirer entity name (creates if new)")
+@click.option("--acquired", help="Acquired entity name (creates if new)")
+@click.option("--resulting-name", "resulting_names", multiple=True, help="Post-event name variant (repeatable)")
+@click.option("--notes", default="", help="Optional notes")
+@click.option("--entity-only", is_flag=True, help="Just add an entity, no event")
+@click.option("--name", "entity_name", help="Entity name (with --entity-only)")
+def ma_add(event_type, event_date, acquirer, acquired, resulting_names, notes, entity_only, entity_name):
+    """Add an entity or M&A event to the registry."""
+    from src.ma_registry import MARegistry
+    from rag.config import MA_REGISTRY_PATH
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+
+    if entity_only:
+        name = entity_name or click.prompt("Entity name")
+        friendly = click.prompt("Friendly name (or Enter for auto)", default="", show_default=False)
+        entity = reg.add_entity(name, friendly=friendly or None)
+        console.print(f"[green]Created entity:[/green] {entity['id']} ({entity['friendly']})")
+        return
+
+    # Interactive if no options provided
+    if not event_type:
+        event_type = click.prompt("Event type", type=click.Choice(["acquisition", "merger", "rebrand", "restructure"]))
+    if not event_date:
+        event_date = click.prompt("Date (YYYY-MM-DD)")
+    if not acquirer:
+        acquirer = click.prompt("Acquirer (surviving entity)")
+    if not acquired:
+        acquired = click.prompt("Acquired entity")
+
+    def _find_or_create(name):
+        for e in reg.list_entities():
+            if e["name"].lower() == name.lower() or e.get("friendly") == name.lower():
+                return e
+        return reg.add_entity(name)
+
+    acq_entity = _find_or_create(acquirer)
+    acd_entity = _find_or_create(acquired)
+
+    rn_list = [{"name": n} for n in resulting_names]
+    if not rn_list:
+        while True:
+            n = click.prompt("Resulting name (or Enter to finish)", default="", show_default=False)
+            if not n:
+                break
+            fs = click.prompt(f"  First seen date for '{n}' (or Enter to skip)", default="", show_default=False)
+            entry = {"name": n}
+            if fs:
+                entry["first_seen"] = fs
+            rn_list.append(entry)
+
+    event = reg.add_event(
+        event_type=event_type,
+        date=event_date,
+        acquirer_id=acq_entity["id"],
+        acquired_id=acd_entity["id"],
+        resulting_names=rn_list,
+        notes=notes,
+    )
+    console.print(f"[green]Created event:[/green] {event['id']} ({event_type})")
+
+
+@ma.command("show")
+@click.argument("identifier")
+def ma_show(identifier):
+    """Show details of an entity or event."""
+    from src.ma_registry import MARegistry
+    from rag.config import MA_REGISTRY_PATH
+    import json
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+
+    entity = reg.get_entity(identifier)
+    if entity:
+        console.print(Panel(
+            json.dumps(entity, indent=2, default=str),
+            title=f"Entity: {entity['name']}",
+            border_style="cyan",
+        ))
+        return
+
+    event = reg.get_event(identifier)
+    if event:
+        acq = reg.get_entity(event["acquirer"])
+        acd = reg.get_entity(event["acquired"])
+        event_display = dict(event)
+        event_display["acquirer_name"] = acq["name"] if acq else "?"
+        event_display["acquired_name"] = acd["name"] if acd else "?"
+        console.print(Panel(
+            json.dumps(event_display, indent=2, default=str),
+            title=f"Event: {event['id']} ({event['type']})",
+            border_style="yellow",
+        ))
+        return
+
+    console.print(f"[red]'{identifier}' not found as entity or event.[/red]")
+
+
+@ma.command("remove")
+@click.argument("identifier")
+@click.option("--force", is_flag=True, help="Skip confirmation")
+def ma_remove(identifier, force):
+    """Remove an entity or event."""
+    from src.ma_registry import MARegistry
+    from rag.config import MA_REGISTRY_PATH
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+
+    event = reg.get_event(identifier)
+    if event:
+        acq = reg.get_entity(event["acquirer"])
+        acd = reg.get_entity(event["acquired"])
+        label = f"{event['id']} ({acq['name'] if acq else '?'} {event['type']} {acd['name'] if acd else '?'})"
+        if not force:
+            click.confirm(f"Remove event {label}?", abort=True)
+        reg.remove_event(identifier)
+        console.print(f"[green]Removed event {identifier}.[/green]")
+        return
+
+    entity = reg.get_entity(identifier)
+    if entity:
+        if not force:
+            click.confirm(f"Remove entity '{entity['name']}' ({entity['id']})?", abort=True)
+        reg.remove_entity(entity["id"])
+        console.print(f"[green]Removed entity {entity['id']}.[/green]")
+        return
+
+    console.print(f"[red]'{identifier}' not found.[/red]")
+
+
+@ma.command("validate")
+def ma_validate():
+    """Validate the M&A registry for errors."""
+    from src.ma_registry import MARegistry
+    from src.chain_validator import validate_registry
+    from rag.config import MA_REGISTRY_PATH
+
+    reg = MARegistry(path=MA_REGISTRY_PATH)
+    if not reg.events:
+        console.print("[dim]No events to validate.[/dim]")
+        return
+
+    console.print(f"Checking {len(reg.events)} events...")
+    alerts = validate_registry(reg, check_orphans_against_data=False)
+
+    errors = [a for a in alerts if a["severity"] == "error"]
+    warnings = [a for a in alerts if a["severity"] == "warning"]
+    infos = [a for a in alerts if a["severity"] == "info"]
+
+    for a in errors:
+        console.print(f"  [red]ERROR:[/red] {a['message']}")
+        console.print(f"    [dim]Action: {a['action']}[/dim]")
+    for a in warnings:
+        console.print(f"  [yellow]WARNING:[/yellow] {a['message']}")
+        console.print(f"    [dim]Action: {a['action']}[/dim]")
+    for a in infos:
+        console.print(f"  [dim]INFO: {a['message']}[/dim]")
+
+    if not alerts:
+        console.print("[green]OK: No issues found.[/green]")
+    else:
+        console.print(f"\n{len(errors)} errors, {len(warnings)} warnings, {len(infos)} info.")
+
+
 if __name__ == "__main__":
     cli()
