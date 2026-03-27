@@ -87,3 +87,112 @@ class TestDivisions:
         tmp_registry.remove_entity(div["id"])
         parent = tmp_registry.get_entity(parent["id"])
         assert composite not in parent.get("divisions", [])
+
+
+class TestEventCRUD:
+    def test_add_event(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        qf = tmp_registry.add_entity("QuickFab Industries")
+        event = tmp_registry.add_event(
+            event_type="acquisition",
+            date="2024-07-15",
+            acquirer_id=apex["id"],
+            acquired_id=qf["id"],
+            resulting_names=[
+                {"name": "Apex-QuickFab Industries", "first_seen": "2024-08-01"},
+                {"name": "AQF Holdings", "first_seen": "2024-09-15"},
+            ],
+            notes="QuickFab absorbed into Apex",
+        )
+        assert event["id"].startswith("ma-")
+        assert event["type"] == "acquisition"
+        assert event["acquirer"] == apex["id"]
+        assert event["acquired"] == qf["id"]
+        assert len(event["resulting_names"]) == 2
+
+    def test_add_merger_with_co_merged(self, tmp_registry):
+        s = tmp_registry.add_entity("Stellar Metalworks")
+        t = tmp_registry.add_entity("TitanForge LLC")
+        event = tmp_registry.add_event(
+            event_type="merger",
+            date="2023-06-01",
+            acquirer_id=s["id"],
+            acquired_id=t["id"],
+            co_merged=[s["id"], t["id"]],
+            resulting_names=[{"name": "StellarForge Industries"}],
+        )
+        assert event["co_merged"] == [s["id"], t["id"]]
+
+    def test_add_rebrand_same_entity(self, tmp_registry):
+        pt = tmp_registry.add_entity("Precision Thermal Co")
+        event = tmp_registry.add_event(
+            event_type="rebrand",
+            date="2025-01-01",
+            acquirer_id=pt["id"],
+            acquired_id=pt["id"],
+            resulting_names=[{"name": "Zenith Thermal Solutions"}],
+        )
+        assert event["acquirer"] == event["acquired"]
+
+    def test_get_event(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        qf = tmp_registry.add_entity("QuickFab Industries")
+        event = tmp_registry.add_event(
+            event_type="acquisition",
+            date="2024-07-15",
+            acquirer_id=apex["id"],
+            acquired_id=qf["id"],
+            resulting_names=[{"name": "AQF Holdings"}],
+        )
+        found = tmp_registry.get_event(event["id"])
+        assert found["type"] == "acquisition"
+
+    def test_remove_event(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        qf = tmp_registry.add_entity("QuickFab Industries")
+        event = tmp_registry.add_event(
+            event_type="acquisition",
+            date="2024-07-15",
+            acquirer_id=apex["id"],
+            acquired_id=qf["id"],
+            resulting_names=[{"name": "AQF Holdings"}],
+        )
+        tmp_registry.remove_event(event["id"])
+        assert tmp_registry.get_event(event["id"]) is None
+
+    def test_event_validates_entity_ids(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        with pytest.raises(ValueError, match="not found"):
+            tmp_registry.add_event(
+                event_type="acquisition",
+                date="2024-07-15",
+                acquirer_id=apex["id"],
+                acquired_id="nonexistent",
+                resulting_names=[{"name": "AQF Holdings"}],
+            )
+
+    def test_list_events(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        qf = tmp_registry.add_entity("QuickFab Industries")
+        tmp_registry.add_event(
+            event_type="acquisition",
+            date="2024-07-15",
+            acquirer_id=apex["id"],
+            acquired_id=qf["id"],
+            resulting_names=[{"name": "AQF Holdings"}],
+        )
+        assert len(tmp_registry.list_events()) == 1
+
+    def test_event_persists(self, tmp_registry):
+        apex = tmp_registry.add_entity("Apex Manufacturing")
+        qf = tmp_registry.add_entity("QuickFab Industries")
+        tmp_registry.add_event(
+            event_type="acquisition",
+            date="2024-07-15",
+            acquirer_id=apex["id"],
+            acquired_id=qf["id"],
+            resulting_names=[{"name": "AQF Holdings"}],
+        )
+        reloaded = MARegistry(path=tmp_registry.path)
+        assert len(reloaded.events) == 1
+        assert reloaded.events[0]["type"] == "acquisition"

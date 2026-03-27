@@ -99,3 +99,64 @@ class MARegistry:
 
     def list_entities(self) -> list[dict]:
         return list(self.entities)
+
+    def add_event(
+        self,
+        event_type: str,
+        date: str,
+        acquirer_id: str,
+        acquired_id: str,
+        resulting_names: list[dict],
+        co_merged: Optional[list[str]] = None,
+        notes: str = "",
+    ) -> dict:
+        """Add an M&A event. Validates that referenced entity IDs exist."""
+        if self.get_entity(acquirer_id) is None:
+            raise ValueError(f"Acquirer entity '{acquirer_id}' not found")
+        if self.get_entity(acquired_id) is None:
+            raise ValueError(f"Acquired entity '{acquired_id}' not found")
+        if co_merged:
+            for eid in co_merged:
+                if self.get_entity(eid) is None:
+                    raise ValueError(f"Co-merged entity '{eid}' not found")
+
+        event_id = f"ma-{_generate_id(f'{acquirer_id}:{acquired_id}')}"
+        while any(e["id"] == event_id for e in self.events):
+            event_id = f"ma-{_generate_id(event_id)}"
+
+        event = {
+            "id": event_id,
+            "type": event_type,
+            "date": date,
+            "acquirer": acquirer_id,
+            "acquired": acquired_id,
+            "resulting_names": resulting_names,
+        }
+        if co_merged:
+            event["co_merged"] = co_merged
+        if notes:
+            event["notes"] = notes
+
+        self.events.append(event)
+        self.save()
+        return event
+
+    def get_event(self, event_id: str) -> Optional[dict]:
+        """Get an event by ID."""
+        for e in self.events:
+            if e["id"] == event_id:
+                return e
+        return None
+
+    def remove_event(self, event_id: str) -> bool:
+        """Remove an event by ID."""
+        before = len(self.events)
+        self.events = [e for e in self.events if e["id"] != event_id]
+        if len(self.events) < before:
+            self.save()
+            return True
+        return False
+
+    def list_events(self) -> list[dict]:
+        """Return all events."""
+        return list(self.events)
