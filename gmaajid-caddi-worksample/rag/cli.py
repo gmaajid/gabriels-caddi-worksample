@@ -1,0 +1,806 @@
+"""CLI interface for the RAG system."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from rag.config import (
+    CONFIRMED_MAPPINGS_PATH,
+    DATA_DIR,
+    KNOWLEDGE_DIR,
+    REVIEW_DIR,
+)
+
+console = Console()
+
+
+import os
+
+PROG_NAME = os.environ.get("CADDI_CLI_NAME", "caddi-cli")
+
+
+@click.group(invoke_without_command=True, name=PROG_NAME)
+@click.pass_context
+def cli(ctx):
+    """CADDi Supply Chain RAG - Knowledge ingestion and query tool."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@cli.command()
+@click.option("--data-dir", type=click.Path(exists=True, path_type=Path), default=str(DATA_DIR))
+@click.option("--knowledge-dir", type=click.Path(exists=True, path_type=Path), default=str(KNOWLEDGE_DIR))
+@click.option("--review-id", default=None, help="Apply only this review ID (default: all reviews).")
+def ingest(data_dir: Path, knowledge_dir: Path, review_id: str):
+    """Ingest CSV data and knowledge documents into the vector store.
+
+    Use --review-id to apply a specific review's decisions. Without it,
+    all review files in config/review/ are applied.
+    """
+    from rag.core import RAGEngine
+
+    engine = RAGEngine()
+    txn_id = engine.begin_transaction()
+    console.print(f"[bold]Ingesting documents...[/bold] (transaction: [cyan]{txn_id}[/cyan])")
+
+    total = 0
+    for directory in [data_dir, knowledge_dir]:
+        if directory.exists():
+            n = engine.ingest_directory(directory)
+            console.print(f"  {directory}: {n} chunks")
+            total += n
+
+    # Ingest confirmed mappings as queryable knowledge
+    from src.human_review import load_confirmed_mappings
+    confirmed = load_confirmed_mappings(CONFIRMED_MAPPINGS_PATH)
+    if confirmed:
+        # Build a readable text document from the mappings
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for name, canonical in confirmed.items():
+            if name != canonical:
+                groups[canonical].append(name)
+        lines = ["Confirmed Supplier Name Mappings:"]
+        for canonical in sorted(groups.keys()):
+            variants = ", ".join(sorted(groups[canonical]))
+            lines.append(f"{canonical}: {variants}")
+        mapping_text = "\n".join(lines)
+        n = engine.ingest_text(mapping_text, source="confirmed_mappings.yaml")
+        console.print(f"  confirmed_mappings.yaml: {n} chunks")
+        total += n
+
+    engine.commit_transaction()
+
+    if review_id:
+        review_path = REVIEW_DIR / f"review_{review_id}.yaml"
+        if review_path.exists():
+            console.print(f"  Applying review: [cyan]{review_id}[/cyan]")
+        else:
+            console.print(f"  [yellow]Review {review_id} not found at {review_path}[/yellow]")
+
+    console.print(f"\n[green bold]Done.[/green bold] {total} chunks ingested. Store has {engine.count} total.")
+    console.print(f"  Transaction: [cyan]{txn_id}[/cyan] (use [bold]caddi-cli revert {txn_id}[/bold] to undo)")
+
+
+@cli.command()
+@click.argument("question")
+@click.option("--top-k", default=8, help="Number of results to retrieve.")
+@click.option("--raw", is_flag=True, help="Show raw chunks without LLM synthesis.")
+def query(question: str, top_k: int, raw: bool):
+    """Query the knowledge base."""
+    from rag.core import RAGEngine
+
+    engine = RAGEngine()
+    if engine.count == 0:
+        console.print("[red]Knowledge base is empty. Run 'caddi-cli ingest' first.[/red]")
+        return
+
+    if raw:
+        hits = engine.query(question, top_k=top_k)
+        table = Table(title=f"Top {len(hits)} results")
+        table.add_column("#", width=3)
+        table.add_column("Source", width=30)
+        table.add_column("Relevance", width=10)
+        table.add_column("Text", max_width=80)
+        for i, hit in enumerate(hits, 1):
+            relevance = f"{1 - hit['distance']:.2f}"
+            source = hit["metadata"].get("source", "?")
+            text = hit["text"][:200] + "..." if len(hit["text"]) > 200 else hit["text"]
+            table.add_row(str(i), source, relevance, text)
+        console.print(table)
+    else:
+        from rag.llm import ask
+
+        context = engine.query_with_context(question, top_k=top_k)
+        with console.status("Thinking..."):
+            answer = ask(question, context)
+        console.print(Panel(answer, title="Answer", border_style="green"))
+
+
+@cli.command()
+@click.option("--top-k", default=8, help="Number of results per query.")
+def chat(top_k: int):
+    """Interactive chat with the knowledge base."""
+    from rag.core import RAGEngine
+    from rag.llm import ask
+
+    engine = RAGEngine()
+    if engine.count == 0:
+        console.print("[red]Knowledge base is empty. Run 'caddi-cli ingest' first.[/red]")
+        return
+
+    console.print("[bold]CADDi Supply Chain Assistant[/bold] (type 'quit' to exit)\n")
+
+    while True:
+        try:
+            question = console.input("[bold blue]You:[/bold blue] ")
+        except (EOFError, KeyboardInterrupt):
+            break
+        if question.strip().lower() in ("quit", "exit", "q"):
+            break
+        if not question.strip():
+            continue
+
+        context = engine.query_with_context(question, top_k=top_k)
+        with console.status("Thinking..."):
+            answer = ask(question, context)
+        console.print(f"\n[bold green]Assistant:[/bold green] {answer}\n")
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+def add(path: Path):
+    """Add a single file to the knowledge base."""
+    from rag.core import RAGEngine
+
+    engine = RAGEngine()
+    txn_id = engine.begin_transaction()
+    if path.is_dir():
+        n = engine.ingest_directory(path)
+    else:
+        n = engine.ingest_file(path)
+    engine.commit_transaction()
+    console.print(f"[green]Added {n} chunks from {path}. Store has {engine.count} total.[/green]")
+    console.print(f"  Transaction: [cyan]{txn_id}[/cyan]")
+
+
+@cli.command()
+@click.option("--data-dir", type=click.Path(exists=True, path_type=Path), default=str(DATA_DIR))
+@click.option("--format", "fmt", type=click.Choice(["table", "tree", "csv"]), default="tree", help="Output format.")
+@click.option("--all", "show_all", is_flag=True, help="Include confirmed mappings with 0 occurrences in data.")
+def mappings(data_dir: Path, fmt: str, show_all: bool):
+    """Visualize supplier name mappings to canonical names.
+
+    By default shows only names found in the data CSVs.
+    Use --all to also show confirmed mappings with no data occurrences.
+    """
+    import pandas as pd
+    from collections import defaultdict
+    from src.supplier_clustering import ClusterMethod, cluster_names
+    from src.human_review import apply_human_overrides, load_confirmed_mappings
+    from rag.config import CONFIRMED_MAPPINGS_PATH
+
+    all_names = []
+    for csv_file in sorted(data_dir.glob("*.csv")):
+        df = pd.read_csv(csv_file)
+        if "supplier_name" in df.columns:
+            all_names.extend(df["supplier_name"].tolist())
+
+    if not all_names:
+        console.print("[red]No supplier names found.[/red]")
+        return
+
+    clusters = cluster_names(all_names, method=ClusterMethod.PIPELINE)
+    clusters = apply_human_overrides(clusters, confirmed_path=CONFIRMED_MAPPINGS_PATH)
+
+    # Merge in confirmed mappings that have 0 occurrences (if --all)
+    confirmed = load_confirmed_mappings(CONFIRMED_MAPPINGS_PATH)
+    if show_all and confirmed:
+        confirmed_groups = defaultdict(set)
+        for name, canonical in confirmed.items():
+            confirmed_groups[canonical].add(name)
+        for canonical, names in confirmed_groups.items():
+            if canonical in clusters:
+                # Add missing confirmed names to existing cluster
+                existing = set(clusters[canonical])
+                clusters[canonical] = sorted(existing | names)
+            else:
+                clusters[canonical] = sorted(names)
+
+    # Compute edge confidence scores (with confirmed overrides)
+    from src.supplier_clustering import compute_edge_scores
+    from src.human_review import load_confirmed_scores
+    confirmed_scores = load_confirmed_scores(CONFIRMED_MAPPINGS_PATH)
+    edge_scores = compute_edge_scores(clusters, confirmed_scores=confirmed_scores)
+
+    def _score_bar(score: float, width: int = 10) -> str:
+        """Render a confidence score as a compact visual bar."""
+        filled = int(score * width)
+        return "█" * filled + "░" * (width - filled)
+
+    def _score_color(score: float) -> str:
+        if score >= 0.85:
+            return "green"
+        elif score >= 0.55:
+            return "yellow"
+        return "red"
+
+    if fmt == "tree":
+        from rich.tree import Tree
+        tree = Tree("[bold]Supplier Name Mappings[/bold]")
+        for canonical in sorted(clusters.keys()):
+            members = clusters[canonical]
+            count = sum(all_names.count(m) for m in members)
+            branch = tree.add(f"[bold cyan]{canonical}[/bold cyan] [dim]({count} occurrences)[/dim]")
+            for m in sorted(members):
+                m_count = all_names.count(m)
+                is_confirmed = m in confirmed
+                scores = edge_scores.get(canonical, {}).get(m, {})
+                combined = scores.get("combined", 0)
+                j = scores.get("jaccard", 0)
+                e = scores.get("embedding", 0)
+                source = scores.get("source", "auto")
+                color = _score_color(combined)
+                bar = _score_bar(combined)
+
+                if m == canonical:
+                    branch.add(f"[green]{m}[/green] [dim]({m_count}x) canonical[/dim]")
+                elif m_count > 0 or is_confirmed:
+                    count_str = f"{m_count}x" if m_count > 0 else "0x"
+                    src_str = f" {source}" if source != "auto" else ""
+                    branch.add(
+                        f"{m} [dim]({count_str})[/dim] "
+                        f"[{color}]{bar} {combined:.2f}[/{color}] "
+                        f"[dim](J={j:.2f} E={e:.2f}{src_str})[/dim]"
+                    )
+                else:
+                    branch.add(f"[dim]{m} (0x)[/dim] [{color}]{bar} {combined:.2f}[/{color}]")
+        console.print(tree)
+
+    elif fmt == "table":
+        table = Table(title="Supplier Name Mappings")
+        table.add_column("Canonical Name", style="cyan bold")
+        table.add_column("Raw Variant")
+        table.add_column("Count", justify="right")
+        table.add_column("Confidence", justify="center")
+        table.add_column("Jaccard", justify="right")
+        table.add_column("Embedding", justify="right")
+        table.add_column("Source")
+
+        for canonical in sorted(clusters.keys()):
+            members = clusters[canonical]
+            first = True
+            for m in sorted(members):
+                m_count = all_names.count(m)
+                scores = edge_scores.get(canonical, {}).get(m, {})
+                combined = scores.get("combined", 0)
+                j = scores.get("jaccard", 0)
+                e = scores.get("embedding", 0)
+                source = scores.get("source", "auto")
+                color = _score_color(combined)
+                bar = _score_bar(combined, 8)
+                table.add_row(
+                    canonical if first else "",
+                    m,
+                    str(m_count),
+                    f"[{color}]{bar} {combined:.2f}[/{color}]",
+                    f"{j:.2f}",
+                    f"{e:.2f}",
+                    source,
+                )
+                first = False
+            table.add_section()
+        console.print(table)
+
+    elif fmt == "csv":
+        console.print("canonical_name,raw_variant,count,confidence,jaccard,embedding,source")
+        for canonical in sorted(clusters.keys()):
+            for m in sorted(clusters[canonical]):
+                m_count = all_names.count(m)
+                scores = edge_scores.get(canonical, {}).get(m, {})
+                combined = scores.get("combined", 0)
+                j = scores.get("jaccard", 0)
+                e = scores.get("embedding", 0)
+                source = scores.get("source", "auto")
+                console.print(f"{canonical},{m},{m_count},{combined:.3f},{j:.3f},{e:.3f},{source}")
+
+
+@cli.command()
+def transactions():
+    """List all RAG ingest transactions."""
+    from rag.core import list_transactions
+
+    txns = list_transactions()
+    if not txns:
+        console.print("[dim]No transactions logged.[/dim]")
+        return
+
+    table = Table(title="RAG Transactions")
+    table.add_column("Transaction ID", style="cyan")
+    table.add_column("Created")
+    table.add_column("Chunks", justify="right")
+    table.add_column("Sources")
+    table.add_column("Reverted")
+
+    for t in txns:
+        created = t["created"][:16] if len(t.get("created", "")) > 16 else t.get("created", "")
+        sources = ", ".join(t.get("sources", [])[:3])
+        if len(t.get("sources", [])) > 3:
+            sources += f" (+{len(t['sources']) - 3} more)"
+        reverted = "[red]yes[/red]" if t.get("reverted") else "[green]no[/green]"
+        table.add_row(
+            t["txn_id"],
+            created,
+            str(t.get("chunk_count", 0)),
+            sources,
+            reverted,
+        )
+    console.print(table)
+
+
+@cli.command()
+@click.argument("txn_id")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt.")
+def revert(txn_id: str, force: bool):
+    """Revert a RAG ingest transaction (delete its chunks).
+
+    Example: caddi-cli revert txn_20260325_023000
+    """
+    from rag.core import RAGEngine, list_transactions
+
+    txns = list_transactions()
+    txn = next((t for t in txns if t["txn_id"] == txn_id), None)
+    if txn is None:
+        console.print(f"[red]Transaction '{txn_id}' not found.[/red]")
+        console.print("Run [bold]caddi-cli transactions[/bold] to see available transactions.")
+        return
+
+    if txn.get("reverted"):
+        console.print(f"[yellow]Transaction '{txn_id}' already reverted.[/yellow]")
+        return
+
+    chunk_count = txn.get("chunk_count", 0)
+    sources = ", ".join(txn.get("sources", []))
+    console.print(f"Transaction: [cyan]{txn_id}[/cyan]")
+    console.print(f"  Chunks: {chunk_count}")
+    console.print(f"  Sources: {sources}")
+
+    if not force:
+        try:
+            confirm = console.input(f"\n  Delete {chunk_count} chunks? (y/N): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]Cancelled.[/dim]")
+            return
+        if confirm != "y":
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    engine = RAGEngine()
+    deleted = engine.revert_transaction(txn_id)
+    console.print(f"\n[green]Reverted:[/green] {deleted} chunks deleted. Store has {engine.count} remaining.")
+
+
+@cli.command()
+def status():
+    """Show knowledge base status."""
+    from rag.core import RAGEngine
+
+    engine = RAGEngine()
+    console.print(f"Vector store: {engine.persist_dir}")
+    console.print(f"Total chunks: {engine.count}")
+
+
+@cli.command()
+@click.option("--data-dir", type=click.Path(exists=True, path_type=Path), default=str(DATA_DIR))
+def review(data_dir: Path):
+    """Generate supplier name review candidates for human verification.
+
+    Creates a new review file with a unique ID in config/review/.
+    Use 'caddi-cli decide' to interactively review, or 'caddi-cli reviews' to list all.
+    """
+    import pandas as pd
+    from src.human_review import find_uncertain_pairs, write_review_file
+    from src.supplier_clustering import ClusterMethod, cluster_names
+
+    all_names = []
+    for csv_file in sorted(data_dir.glob("*.csv")):
+        df = pd.read_csv(csv_file)
+        if "supplier_name" in df.columns:
+            all_names.extend(df["supplier_name"].tolist())
+
+    if not all_names:
+        console.print("[red]No supplier names found in CSV files.[/red]")
+        return
+
+    console.print(f"Found {len(all_names)} name occurrences ({len(set(all_names))} unique)")
+
+    clusters = cluster_names(all_names, method=ClusterMethod.PIPELINE)
+    console.print(f"Clustering produced {len(clusters)} groups")
+
+    candidates = find_uncertain_pairs(clusters, all_names)
+    if not candidates:
+        console.print("[green]No uncertain pairs found — clustering is confident.[/green]")
+        return
+
+    path = write_review_file(candidates)
+    import yaml
+    with open(path) as f:
+        review_id = yaml.safe_load(f).get("review_id", "unknown")
+
+    console.print(f"\n[yellow]{len(candidates)} uncertain pairs written.[/yellow]")
+    console.print(f"  Review ID: [bold cyan]{review_id}[/bold cyan]")
+    console.print(f"  File:      {path}")
+    console.print(f"\nRun [bold]caddi-cli decide {review_id}[/bold] to review interactively.")
+
+
+@cli.command()
+def reviews():
+    """List all review sessions and their status."""
+    from src.human_review import list_reviews
+
+    all_reviews = list_reviews()
+    if not all_reviews:
+        console.print("[dim]No reviews found. Run 'caddi-cli review' to create one.[/dim]")
+        return
+
+    table = Table(title="Review Sessions")
+    table.add_column("Review ID", style="cyan")
+    table.add_column("Created")
+    table.add_column("Reviewed")
+    table.add_column("Reviewed By")
+    table.add_column("Human", justify="right")
+    table.add_column("Auto", justify="right")
+    table.add_column("Total", justify="right")
+
+    for r in all_reviews:
+        created = r["created"][:16] if len(r["created"]) > 16 else r["created"]
+        if r.get("reviewed"):
+            reviewed_display = "[green]yes[/green]"
+            reviewed_by = r.get("reviewed_by") or ""
+        else:
+            reviewed_display = "[yellow]no[/yellow]"
+            reviewed_by = ""
+        table.add_row(
+            r["review_id"],
+            created,
+            reviewed_display,
+            reviewed_by,
+            str(r["decided"]),
+            str(r["pending"]),
+            str(r["total"]),
+        )
+
+    console.print(table)
+    console.print(f"\nUse [bold]caddi-cli decide <review_id>[/bold] to review a specific session.")
+
+
+@cli.command()
+@click.argument("review_id", required=False)
+@click.option("--re-review", is_flag=True, help="Re-review a file already marked as reviewed.")
+def decide(review_id: str, re_review: bool):
+    """Interactively review uncertain supplier name pairs.
+
+    Skips files already marked as reviewed unless --re-review is passed.
+    Navigate freely: p=previous, n=next, g=goto, m=merge, s=split, q=quit.
+    Each decision records who made it (auto vs human) and when.
+    """
+    import yaml
+    from datetime import datetime
+    from src.human_review import list_reviews, load_reviewer
+
+    # Load reviewer identity
+    reviewer = load_reviewer()
+    if not reviewer["name"]:
+        console.print("[yellow]No reviewer configured.[/yellow] Edit [bold]config/reviewer.yaml[/bold] with your name.")
+        console.print("[dim]Continuing as anonymous reviewer...[/dim]\n")
+
+    # Find the review file
+    if review_id:
+        review_file = REVIEW_DIR / f"review_{review_id}.yaml"
+        if not review_file.exists():
+            console.print(f"[red]Review '{review_id}' not found.[/red]")
+            console.print("Run [bold]caddi-cli reviews[/bold] to see available reviews.")
+            return
+        # Check if already reviewed
+        with open(review_file) as f:
+            check = yaml.safe_load(f) or {}
+        if check.get("reviewed") and not re_review:
+            reviewed_by = check.get("reviewed_by", "someone")
+            reviewed_at = (check.get("reviewed_at") or "")[:16]
+            console.print(f"[yellow]Review {review_id} already reviewed by {reviewed_by} @ {reviewed_at}.[/yellow]")
+            console.print("Use [bold]--re-review[/bold] to review again.")
+            return
+    else:
+        all_reviews = list_reviews()
+        # Filter to un-reviewed files
+        candidates = [r for r in all_reviews if not r.get("reviewed")]
+        if not candidates:
+            if all_reviews:
+                console.print("[green]All reviews are marked as reviewed.[/green]")
+                console.print("Use [bold]caddi-cli decide <review_id> --re-review[/bold] to revisit one.")
+            else:
+                console.print("[green]No reviews found.[/green] Run [bold]caddi-cli review[/bold] to create one.")
+            return
+        review_file = candidates[-1]["path"]
+        review_id = candidates[-1]["review_id"]
+
+    with open(review_file) as f:
+        data = yaml.safe_load(f) or {}
+
+    pairs = data.get("pairs", [])
+    if not pairs:
+        console.print("[green]No pairs to review.[/green]")
+        return
+
+    total = len(pairs)
+    human_count = sum(1 for p in pairs if p.get("decided_by") == "human")
+    auto_count = sum(1 for p in pairs if p.get("decided_by", "auto") == "auto")
+
+    reviewer_label = reviewer["name"] or "anonymous"
+    console.print(f"[bold]Review: {review_id}[/bold] ({total} pairs: {human_count} human, {auto_count} auto)")
+    console.print(f"  Reviewer: [cyan]{reviewer_label}[/cyan]")
+    console.print(
+        "  [green]m[/green]=merge  [red]s[/red]=split  "
+        "[dim]Enter[/dim]=skip  "
+        "[blue]p[/blue]=prev  [blue]n[/blue]=next  "
+        "[blue]g[/blue] N=goto pair N  "
+        "[dim]q[/dim]=quit\n"
+    )
+
+    def _display_pair(idx: int):
+        pair = pairs[idx]
+        pair_id = pair.get("pair_id", f"{idx + 1}")
+        j = pair.get("tfidf_jaccard", 0)
+        e = pair.get("embedding_cosine", 0)
+        j_bar = "+" * int(j * 20) + "-" * (20 - int(j * 20))
+        e_bar = "+" * int(e * 20) + "-" * (20 - int(e * 20))
+
+        decision = pair.get("decision", "skip")
+        decided_by = pair.get("decided_by", "auto")
+        decided_at = pair.get("decided_at", "")
+        if decided_at and len(decided_at) > 16:
+            decided_at = decided_at[:16]
+
+        # Color the current decision based on source
+        reviewer_name = pair.get("decided_by_name", "")
+        if decided_by == "human":
+            who = reviewer_name or "human"
+            dec_display = f"[bold green]{decision}[/bold green] [dim]({who} @ {decided_at})[/dim]"
+        elif decision in ("merged", "split"):
+            dec_display = f"[yellow]{decision}[/yellow] [dim](auto)[/dim]"
+        else:
+            dec_display = f"[dim]{decision} (auto)[/dim]"
+
+        console.print(f"[bold]--- {pair_id} ({idx + 1}/{total}) ---[/bold]")
+        console.print(f"  A: [cyan]{pair['name_a']}[/cyan]")
+        console.print(f"  B: [cyan]{pair['name_b']}[/cyan]")
+        console.print(f"  Jaccard:   [{j_bar}] {j:.2f}")
+        console.print(f"  Embedding: [{e_bar}] {e:.2f}")
+        console.print(f"  System:    [yellow]{pair.get('current_action', '?')}[/yellow] — {pair.get('reason', '')}")
+        console.print(f"  Decision:  {dec_display}")
+
+    def _apply_decision(idx: int, decision: str):
+        pairs[idx]["decision"] = decision
+        pairs[idx]["decided_by"] = "human"
+        pairs[idx]["decided_by_name"] = reviewer["name"] or "anonymous"
+        pairs[idx]["decided_by_email"] = reviewer["email"] or ""
+        pairs[idx]["decided_at"] = datetime.now().isoformat()
+        pairs[idx]["review_id"] = review_id
+
+    # Start at first auto-decided pair, or first pair if all human
+    current = next((i for i, p in enumerate(pairs) if p.get("decided_by", "auto") == "auto"), 0)
+    reviewed = 0
+
+    while True:
+        _display_pair(current)
+
+        try:
+            choice = console.input("  ([green]m[/green]erge / [red]s[/red]plit / [blue]p[/blue]rev / [blue]n[/blue]ext / [blue]g[/blue] N / [dim]q[/dim]uit): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]Saving...[/dim]")
+            break
+
+        if choice in ("q", "quit"):
+            break
+        elif choice in ("m", "merge"):
+            _apply_decision(current, "merge")
+            console.print("  [green]-> merge (human)[/green]\n")
+            reviewed += 1
+            current = min(current + 1, total - 1)
+        elif choice in ("s", "split"):
+            _apply_decision(current, "split")
+            console.print("  [red]-> split (human)[/red]\n")
+            reviewed += 1
+            current = min(current + 1, total - 1)
+        elif choice in ("p", "prev"):
+            current = max(current - 1, 0)
+            console.print()
+        elif choice in ("n", "next", ""):
+            current = min(current + 1, total - 1)
+            console.print()
+        elif choice.startswith("g"):
+            # goto: "g 5" or "g5"
+            num_str = choice[1:].strip()
+            try:
+                target = int(num_str) - 1
+                if 0 <= target < total:
+                    current = target
+                    console.print()
+                else:
+                    console.print(f"  [red]Invalid: enter 1-{total}[/red]\n")
+            except ValueError:
+                console.print(f"  [red]Usage: g <number> (1-{total})[/red]\n")
+        else:
+            console.print("  [dim]Unknown command. m/s/p/n/g N/q[/dim]\n")
+
+    # Save
+    auto_remaining = sum(1 for p in pairs if p.get("decided_by", "auto") == "auto")
+    human_total = sum(1 for p in pairs if p.get("decided_by") == "human")
+    data["status"] = "complete" if auto_remaining == 0 else "pending"
+
+    # Mark as reviewed when all pairs have human decisions
+    if auto_remaining == 0 and not data.get("reviewed"):
+        data["reviewed"] = True
+        data["reviewed_at"] = datetime.now().isoformat()
+        data["reviewed_by"] = reviewer["name"] or "anonymous"
+
+    with open(review_file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    console.print(f"\n[bold]{reviewed} decisions this session. {human_total}/{total} total human decisions.[/bold]")
+    console.print(f"Saved to {review_file}")
+    if auto_remaining > 0:
+        console.print(f"[yellow]{auto_remaining} auto decisions remaining.[/yellow]")
+    elif data.get("reviewed"):
+        console.print(f"[green]Review marked as complete by {data['reviewed_by']}.[/green]")
+
+
+@cli.command()
+@click.option("--data-dir", type=click.Path(exists=True, path_type=Path), default=str(DATA_DIR))
+@click.option("--note", default="", help="Optional note for the snapshot.")
+@click.option("--review-id", default=None, help="Associate with a review ID.")
+def snapshot(data_dir: Path, note: str, review_id: str):
+    """Take a snapshot of the current clustering state.
+
+    Snapshots are versioned and can be diffed to see how review
+    decisions change supplier associations over time.
+    """
+    import pandas as pd
+    from src.supplier_clustering import ClusterMethod, cluster_names
+    from src.human_review import apply_human_overrides
+    from src.clustering_snapshot import take_snapshot
+    from rag.config import CONFIRMED_MAPPINGS_PATH
+
+    all_names = []
+    for csv_file in sorted(data_dir.glob("*.csv")):
+        df = pd.read_csv(csv_file)
+        if "supplier_name" in df.columns:
+            all_names.extend(df["supplier_name"].tolist())
+
+    if not all_names:
+        console.print("[red]No supplier names found.[/red]")
+        return
+
+    clusters = cluster_names(all_names, method=ClusterMethod.PIPELINE)
+    clusters = apply_human_overrides(clusters, confirmed_path=CONFIRMED_MAPPINGS_PATH)
+
+    from src.supplier_clustering import compute_edge_scores
+    from src.human_review import load_confirmed_scores
+    confirmed_scores = load_confirmed_scores(CONFIRMED_MAPPINGS_PATH)
+    edge_scores = compute_edge_scores(clusters, confirmed_scores=confirmed_scores)
+
+    path = take_snapshot(clusters, review_id=review_id, note=note, edge_scores=edge_scores)
+    console.print(f"[green]Snapshot saved:[/green] {path}")
+    console.print(f"  Clusters: {len(clusters)}, Names: {sum(len(v) for v in clusters.values())}")
+
+
+@cli.command()
+def snapshots():
+    """List all clustering snapshots."""
+    from src.clustering_snapshot import list_snapshots
+
+    all_snaps = list_snapshots()
+    if not all_snaps:
+        console.print("[dim]No snapshots. Run 'caddi-cli snapshot' to create one.[/dim]")
+        return
+
+    table = Table(title="Clustering Snapshots")
+    table.add_column("Snapshot ID", style="cyan")
+    table.add_column("Created")
+    table.add_column("Review ID")
+    table.add_column("Clusters", justify="right")
+    table.add_column("Names", justify="right")
+    table.add_column("Note")
+
+    for s in all_snaps:
+        created = s["created"][:16] if len(s["created"]) > 16 else s["created"]
+        table.add_row(
+            s["snapshot_id"],
+            created,
+            s.get("review_id") or "",
+            str(s["n_clusters"]),
+            str(s["n_names"]),
+            s.get("note", ""),
+        )
+    console.print(table)
+
+
+@cli.command()
+@click.argument("old_id")
+@click.argument("new_id")
+def diff(old_id: str, new_id: str):
+    """Show what changed between two clustering snapshots.
+
+    Example: caddi-cli diff 20260325_010000 20260325_020000
+    """
+    from src.clustering_snapshot import diff_snapshots, format_diff
+
+    try:
+        result = diff_snapshots(old_id, new_id)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        console.print("Run [bold]caddi-cli snapshots[/bold] to see available snapshots.")
+        return
+
+    output = format_diff(result)
+    s = result["summary"]
+
+    if s["names_moved"] == 0 and s["clusters_added"] == 0 and s["clusters_removed"] == 0:
+        console.print(f"[green]No changes between {old_id} and {new_id}.[/green]")
+    else:
+        console.print(Panel(output, title=f"Diff: {old_id} -> {new_id}", border_style="cyan"))
+
+
+@cli.command("commit-review")
+@click.argument("review_id")
+def commit_review(review_id: str):
+    """Snapshot and git-commit a review's decisions.
+
+    Takes a clustering snapshot linked to the review, then commits the
+    review file, snapshot, and confirmed mappings together.
+
+    Example: caddi-cli commit-review 20260325_015431
+    """
+    import subprocess
+
+    # Take snapshot
+    console.print(f"[bold]Taking snapshot for review {review_id}...[/bold]")
+    result = subprocess.run(
+        [".venv/bin/python", "-m", "rag.cli", "snapshot",
+         "--data-dir", "data/", "--review-id", review_id,
+         "--note", f"commit-review {review_id}"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        console.print(f"[red]Snapshot failed:[/red] {result.stderr}")
+        return
+    console.print(result.stdout.strip())
+
+    # Git add + commit
+    console.print("\n[bold]Committing to git...[/bold]")
+    subprocess.run(["git", "add", "config/review/", "config/confirmed_mappings.yaml"], check=True)
+    msg = (
+        f"review: {review_id}\n\n"
+        "Supplier name review decisions committed.\n"
+        "Review file and clustering snapshot included.\n"
+        "Use 'caddi-cli diff OLD=<id> NEW=<id>' to see what changed."
+    )
+    result = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True)
+    if result.returncode != 0:
+        if "nothing to commit" in result.stdout:
+            console.print("[yellow]Nothing to commit — no changes since last commit.[/yellow]")
+        else:
+            console.print(f"[red]Commit failed:[/red] {result.stderr}")
+        return
+
+    console.print(f"[green]Committed.[/green]")
+    subprocess.run(["git", "log", "--oneline", "-1"])
+
+
+if __name__ == "__main__":
+    cli()

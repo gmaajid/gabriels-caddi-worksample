@@ -1,0 +1,56 @@
+# Human-confirmed supplier name mappings.
+#
+# These override automated clustering. Add entries as new suppliers
+# are encountered or when the automated system makes mistakes.
+#
+# Confirmed mappings get a confidence score of 1.0 by default.
+# You can set a custom default or per-variant score:
+#
+#   default_score: 1.0          # applied to all names without explicit score
+#
+# Format (two styles — can mix within one group):
+#
+#   Simple (all variants get default_score):
+#     - names: ["Variant 1", "Variant 2"]
+#       canonical: "Official Company Name"
+#
+#   With custom scores:
+#     - names:
+#         - name: "Variant 1"
+#           score: 0.95         # you're 95% sure this is right
+#         - "Variant 2"         # gets default_score (1.0)
+#       canonical: "Official Company Name"
+#
+# To add a new mapping:
+# 1. Run: caddi-cli review
+# 2. Run: caddi-cli decide
+# 3. Or add directly here for permanent overrides
+# 4. Run: caddi-cli ingest
+
+mappings:
+  - names:
+      - "APEX MFG"
+      - "Apex Mfg"
+      - "APEX Manufacturing Inc"
+      - "Apex Manufacturing Inc"
+      - "APEX MANUFACTURING INC"
+      - "APEX MANUFACTURING"
+      - "APEX MANUFACTURING CO"
+      - "APEX MANUFACTURING CORP"
+      - "APEX MANUFACTURING CORPORATION"
+      - "APEX MANUFACTURING CORPORATION INC"
+      - "APEX MANUFACTURING CORPORATION INC."
+      - "APEX MANUFACTURING CORPORATION INC. LLC"
+      - "APEX MANUFACTURING CORPORATION INC. LLC."
+      - "APEX MANUFACTURING CORPORATION INC. LLC. INC"
+    canonical: "Apex Manufacturing"
+
+  - names:
+      - "Apex Farms LLC"
+      - "APEX FARMS"
+    canonical: "Apex Farms"
+
+  - names:
+      - "Apex Fabrication Services"
+      - "APEX FAB INC"
+    canonical: "Apex Fabrication"

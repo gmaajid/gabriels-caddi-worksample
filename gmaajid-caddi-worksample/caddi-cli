@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# CADDi Supply Chain RAG CLI
+# Wrapper that uses the project venv without depending on pip-installed scripts.
+# Usage: ./caddi-cli <command> [options]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$SCRIPT_DIR/.venv/bin/python"
+
+if [ ! -f "$VENV" ]; then
+    echo "Virtual environment not found. Run: make setup"
+    exit 1
+fi
+
+# Set argv[0] to caddi-cli so Click shows the right usage line
+exec "$VENV" -c "
+import sys
+sys.argv[0] = 'caddi-cli'
+from rag.cli import cli
+cli()
+" "$@"
