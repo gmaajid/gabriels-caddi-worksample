@@ -15,6 +15,7 @@ REVIEW_DIR = CONFIG_DIR / "review"
 REVIEW_CANDIDATES_PATH = REVIEW_DIR / "review_candidates.yaml"
 MA_REGISTRY_PATH = CONFIG_DIR / "ma_registry.yaml"
 TEST_SCENARIOS_PATH = CONFIG_DIR / "test_scenarios.yaml"
+TEST_SCENARIOS_EXTENDED_PATH = CONFIG_DIR / "test_scenarios_extended.yaml"
 DEMO_DIR = DATA_DIR / "demo"
 WEB_DIR = PROJECT_ROOT / "web"
 

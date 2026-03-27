@@ -9,6 +9,7 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import yaml
@@ -31,6 +32,18 @@ def load_test_scenarios(path: Path) -> list[dict]:
     with open(path) as f:
         data = yaml.safe_load(f) or {}
     return data.get("scenarios", [])
+
+
+def load_all_scenarios(
+    base_path: Path,
+    extended_path: Optional[Path] = None,
+) -> list[dict]:
+    """Load scenarios from base file, optionally merging extended scenarios."""
+    scenarios = load_test_scenarios(base_path)
+    if extended_path and extended_path.exists():
+        extended = load_test_scenarios(extended_path)
+        scenarios.extend(extended)
+    return scenarios
 
 
 def generate_demo_data(

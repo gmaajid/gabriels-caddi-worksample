@@ -1032,7 +1032,8 @@ def demo():
 
 
 @demo.command("generate")
-def demo_generate():
+@click.option("--extended", is_flag=True, help="Include extended test scenarios (68 total)")
+def demo_generate(extended):
     """Generate synthetic demo CSVs from M&A registry and test scenarios.
 
     Reads config/ma_registry.yaml and config/test_scenarios.yaml,
@@ -1040,10 +1041,11 @@ def demo_generate():
 
     Example:
         caddi-cli demo generate
+        caddi-cli demo generate --extended
     """
     from src.ma_registry import MARegistry
-    from src.demo_generator import generate_demo_data
-    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH, DEMO_DIR
+    from src.demo_generator import generate_demo_data, load_all_scenarios
+    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH, TEST_SCENARIOS_EXTENDED_PATH, DEMO_DIR
 
     if not MA_REGISTRY_PATH.exists():
         console.print("[red]No M&A registry found. Run 'caddi-cli ma add' first.[/red]")
@@ -1055,11 +1057,29 @@ def demo_generate():
     reg = MARegistry(path=MA_REGISTRY_PATH)
     console.print(f"Reading ma_registry.yaml ({len(reg.events)} events)")
 
-    files = generate_demo_data(
-        registry=reg,
-        scenarios_path=TEST_SCENARIOS_PATH,
-        output_dir=DEMO_DIR,
-    )
+    if extended:
+        output_dir = DEMO_DIR.parent / "demo_extended"
+        scenarios = load_all_scenarios(TEST_SCENARIOS_PATH, TEST_SCENARIOS_EXTENDED_PATH)
+        base_count = len(load_all_scenarios(TEST_SCENARIOS_PATH))
+        ext_count = len(scenarios) - base_count
+        console.print(f"Using {len(scenarios)} scenarios ({base_count} base + {ext_count} extended)")
+        # Write scenarios to a temp path so generate_demo_data can use them
+        import tempfile, yaml as _yaml
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tf:
+            _yaml.dump({"scenarios": scenarios}, tf)
+            tmp_path = Path(tf.name)
+        files = generate_demo_data(
+            registry=reg,
+            scenarios_path=tmp_path,
+            output_dir=output_dir,
+        )
+        tmp_path.unlink(missing_ok=True)
+    else:
+        files = generate_demo_data(
+            registry=reg,
+            scenarios_path=TEST_SCENARIOS_PATH,
+            output_dir=DEMO_DIR,
+        )
 
     console.print("[green]Generated:[/green]")
     for name, path in files.items():
@@ -1069,7 +1089,8 @@ def demo_generate():
 
 
 @demo.command("run")
-def demo_run():
+@click.option("--extended", is_flag=True, help="Include extended test scenarios")
+def demo_run(extended):
     """Run the full resolution pipeline on demo data and report metrics.
 
     Resolves all demo supplier names using the three-stage pipeline
@@ -1078,20 +1099,27 @@ def demo_run():
 
     Example:
         caddi-cli demo run
+        caddi-cli demo run --extended
     """
     from src.ma_registry import MARegistry
     from src.ma_resolver import MAResolver
-    from src.demo_generator import load_test_scenarios
+    from src.demo_generator import load_test_scenarios, load_all_scenarios
     from src.benchmark import BenchmarkResult, compute_metrics
     from src.supplier_clustering import ClusterMethod, cluster_names
-    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH
+    from rag.config import MA_REGISTRY_PATH, TEST_SCENARIOS_PATH, TEST_SCENARIOS_EXTENDED_PATH
 
     if not TEST_SCENARIOS_PATH.exists():
         console.print("[red]No test scenarios. Run 'caddi-cli demo generate' first.[/red]")
         return
 
-    scenarios = load_test_scenarios(TEST_SCENARIOS_PATH)
-    console.print(f"Resolving {len(scenarios)} test scenarios...\n")
+    if extended:
+        scenarios = load_all_scenarios(TEST_SCENARIOS_PATH, TEST_SCENARIOS_EXTENDED_PATH)
+        base_count = len(load_test_scenarios(TEST_SCENARIOS_PATH))
+        ext_count = len(scenarios) - base_count
+        console.print(f"Resolving {len(scenarios)} test scenarios ({base_count} base + {ext_count} extended)...\n")
+    else:
+        scenarios = load_test_scenarios(TEST_SCENARIOS_PATH)
+        console.print(f"Resolving {len(scenarios)} test scenarios...\n")
 
     # Set up resolver
     reg = MARegistry(path=MA_REGISTRY_PATH) if MA_REGISTRY_PATH.exists() else None
@@ -1099,7 +1127,16 @@ def demo_run():
 
     # Collect all input names for clustering
     all_names = [sc["input_name"] for sc in scenarios]
-    canonical_names = list(set(sc["expected_canonical"] for sc in scenarios))
+    # Include real Hoth data names as clustering context when using extended scenarios
+    canonical_names = list(set(
+        sc["expected_canonical"] for sc in scenarios
+        if sc.get("expected_canonical") != "AMBIGUOUS"
+    ))
+    if extended and reg:
+        for event in reg.events:
+            for rn in event.get("resulting_names", []):
+                canonical_names.append(rn["name"])
+        canonical_names = list(set(canonical_names))
     cluster_input = all_names + canonical_names
 
     clusters = cluster_names(cluster_input, method=ClusterMethod.PIPELINE)
@@ -1114,9 +1151,20 @@ def demo_run():
         expected = sc["expected_canonical"]
         difficulty = sc["difficulty"]
         category = sc.get("category", "")
+        order_date = sc.get("order_date", "2026-01-01")
+        is_ambiguous = (expected == "AMBIGUOUS")
 
         # Stage 1: clustering
         cluster_result = lookup.get(name)
+
+        if is_ambiguous:
+            # AMBIGUOUS scenarios: correct if system flags ambiguity or returns any valid candidate
+            valid_candidates = sc.get("valid_candidates", [])
+            flagged = (cluster_result is None) or (cluster_result in valid_candidates)
+            results.append(BenchmarkResult(
+                name, expected, cluster_result, flagged, difficulty, category, "clustering"))
+            continue
+
         if cluster_result and cluster_result == expected:
             results.append(BenchmarkResult(
                 name, expected, cluster_result, True, difficulty, category, "clustering"))
@@ -1124,7 +1172,7 @@ def demo_run():
 
         # Stage 2: M&A resolver
         if resolver:
-            ma_result = resolver.resolve(name, "2026-01-01")
+            ma_result = resolver.resolve(name, order_date)
             if ma_result.resolved:
                 results.append(BenchmarkResult(
                     name, expected, ma_result.canonical, True, difficulty, category, "ma_registry"))
