@@ -1,0 +1,443 @@
+metadata:
+  generated: "2026-03-27"
+  description: "Extended ground truth for entity resolution — 50+ scenarios covering OCR, unicode, word order, combined errors, division variants, temporal edge cases, and adversarial false-positive traps"
+  extends: "test_scenarios.yaml"
+  note: "These supplement the original 19 scenarios (SC-001 to SC-032). Run alongside or independently."
+
+scenarios:
+  # ==========================================================================
+  # TIER 1: Easy (high token/embedding overlap, no M&A needed)
+  # ==========================================================================
+
+  # --- Abbreviation variants ---
+  - id: EX-101
+    difficulty: 1
+    category: abbreviation
+    input_name: "Apex Mfg Inc"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Abbreviation + legal suffix combined"
+
+  - id: EX-102
+    difficulty: 1
+    category: abbreviation
+    input_name: "PRECISION THERMAL"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: false
+    description: "Missing 'Co' suffix entirely"
+
+  - id: EX-103
+    difficulty: 1
+    category: abbreviation
+    input_name: "TITANFORGE L.L.C."
+    expected_canonical: "TitanForge LLC"
+    requires_ma_registry: false
+    description: "Dotted legal suffix"
+
+  - id: EX-104
+    difficulty: 1
+    category: abbreviation
+    input_name: "Stellar Metal Works"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "Compound word split into two"
+
+  # --- Case variations ---
+  - id: EX-105
+    difficulty: 1
+    category: case_variation
+    input_name: "AEROFLOW SYSTEMS"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: false
+    description: "All uppercase"
+
+  - id: EX-106
+    difficulty: 1
+    category: case_variation
+    input_name: "quickfab industries"
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "All lowercase"
+
+  - id: EX-107
+    difficulty: 1
+    category: case_variation
+    input_name: "APEX MANUFACTURING INC."
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "All caps with dotted suffix"
+
+  # --- Whitespace/punctuation ---
+  - id: EX-108
+    difficulty: 1
+    category: whitespace
+    input_name: "Apex  Manufacturing"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Double space"
+
+  - id: EX-109
+    difficulty: 1
+    category: whitespace
+    input_name: " QuickFab Industries "
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Leading/trailing whitespace"
+
+  - id: EX-110
+    difficulty: 1
+    category: punctuation
+    input_name: "Stellar Metalworks,"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "Trailing comma (data entry artifact)"
+
+  - id: EX-111
+    difficulty: 1
+    category: punctuation
+    input_name: "TitanForge, LLC"
+    expected_canonical: "TitanForge LLC"
+    requires_ma_registry: false
+    description: "Comma before legal suffix"
+
+  # ==========================================================================
+  # TIER 2: Medium (typos, OCR, word order, combined errors)
+  # ==========================================================================
+
+  # --- OCR-like corruption ---
+  - id: EX-201
+    difficulty: 2
+    category: ocr
+    input_name: "Apex Manufactur1ng"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "OCR digit substitution (i->1)"
+
+  - id: EX-202
+    difficulty: 2
+    category: ocr
+    input_name: "Ste11ar Metalworks"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "OCR digit substitution (ll->11)"
+
+  - id: EX-203
+    difficulty: 2
+    category: ocr
+    input_name: "Precisi0n Thermal Co"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: false
+    description: "OCR digit substitution (o->0)"
+
+  # --- Typo combinations ---
+  - id: EX-204
+    difficulty: 2
+    category: typo
+    input_name: "Apexx Manufacturing"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Doubled letter"
+
+  - id: EX-205
+    difficulty: 2
+    category: typo
+    input_name: "AeroFow Systems"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: false
+    description: "Missing letter in compound word"
+
+  - id: EX-206
+    difficulty: 2
+    category: typo
+    input_name: "QuickFab Industires"
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Transposed letters"
+
+  - id: EX-207
+    difficulty: 2
+    category: typo
+    input_name: "Ttianforge LLC"
+    expected_canonical: "TitanForge LLC"
+    requires_ma_registry: false
+    description: "Transposed first letters"
+
+  # --- Abbreviation + typo combined ---
+  - id: EX-208
+    difficulty: 2
+    category: combined
+    input_name: "APXE MFG"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Typo in abbreviated name"
+
+  - id: EX-209
+    difficulty: 2
+    category: combined
+    input_name: "Quckfab Ind."
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Missing letter + abbreviation + dot"
+
+  # --- Word order ---
+  - id: EX-210
+    difficulty: 2
+    category: word_order
+    input_name: "Manufacturing Apex Inc"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Reversed word order with suffix"
+
+  - id: EX-211
+    difficulty: 2
+    category: word_order
+    input_name: "Metalworks Stellar"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: false
+    description: "Reversed word order"
+
+  # --- Extra words / noise ---
+  - id: EX-212
+    difficulty: 2
+    category: noise
+    input_name: "Apex Manufacturing Group International"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Extra words appended"
+
+  - id: EX-213
+    difficulty: 2
+    category: noise
+    input_name: "The QuickFab Industries Company"
+    expected_canonical: "QuickFab Industries"
+    requires_ma_registry: false
+    description: "Extra words prepended and appended"
+
+  # --- Unicode ---
+  - id: EX-214
+    difficulty: 2
+    category: unicode
+    input_name: "Ａｅｒｏflow Systems"
+    expected_canonical: "AeroFlow Systems"
+    requires_ma_registry: false
+    description: "Fullwidth unicode characters mixed with ASCII"
+
+  - id: EX-215
+    difficulty: 2
+    category: unicode
+    input_name: "Précision Thermal Co"
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: false
+    description: "Accented character (French keyboard artifact)"
+
+  # ==========================================================================
+  # TIER 3: Hard (M&A with partial overlap, division variants, multi-context)
+  # ==========================================================================
+
+  # --- Division name variants ---
+  - id: EX-301
+    difficulty: 3
+    category: division
+    input_name: "Bright Star Foundry"
+    expected_canonical: "Bright Star Foundrys"
+    requires_ma_registry: false
+    description: "Division name missing trailing 's' — resolves to division, NOT parent"
+
+  - id: EX-302
+    difficulty: 3
+    category: division
+    input_name: "BSF"
+    expected_canonical: "Bright Star Foundrys"
+    requires_ma_registry: false
+    description: "Division acronym — hard without context"
+
+  - id: EX-303
+    difficulty: 3
+    category: division
+    input_name: "Juniper Racing"
+    expected_canonical: "Juniper Racing Parts"
+    requires_ma_registry: false
+    description: "Division name truncated"
+
+  - id: EX-304
+    difficulty: 3
+    category: division
+    input_name: "Knight Fastener Fab Svc"
+    expected_canonical: "Knight Fastener Fabrication Services"
+    requires_ma_registry: false
+    description: "Division name heavily abbreviated"
+
+  # --- Post-M&A with typos ---
+  - id: EX-305
+    difficulty: 3
+    category: post_acquisition_typo
+    input_name: "Apex-Quickfab Ind."
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Acquisition name with lowercase + abbreviation"
+
+  - id: EX-306
+    difficulty: 3
+    category: post_merger_typo
+    input_name: "Stellar Forge Industries"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: true
+    ma_event: "ma-81cb6c"
+    description: "Merger name with space in compound word"
+
+  # --- Temporal edge cases ---
+  - id: EX-307
+    difficulty: 3
+    category: temporal_boundary
+    input_name: "StellarForge Industries"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: true
+    ma_event: "ma-81cb6c"
+    order_date: "2023-06-01"
+    description: "Merger name used on exact event date — should resolve"
+
+  - id: EX-308
+    difficulty: 3
+    category: temporal_boundary
+    input_name: "StellarForge Industries"
+    expected_canonical: "Stellar Metalworks"
+    requires_ma_registry: true
+    ma_event: "ma-81cb6c"
+    order_date: "2023-05-31"
+    description: "Merger name used one day BEFORE event — should NOT resolve via M&A"
+
+  # --- Partial M&A name with noise ---
+  - id: EX-309
+    difficulty: 3
+    category: post_acquisition
+    input_name: "AQF Holdings Inc."
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Acquisition acronym with added legal suffix"
+
+  - id: EX-310
+    difficulty: 3
+    category: post_acquisition
+    input_name: "Apex Manufacturing (formerly QuickFab)"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: false
+    description: "Parenthetical former name — clustering should handle via Apex token"
+
+  # ==========================================================================
+  # TIER 4: Adversarial (zero overlap, false positive traps, ambiguity)
+  # ==========================================================================
+
+  # --- False positive traps (similar names, DIFFERENT companies) ---
+  - id: EX-401
+    difficulty: 4
+    category: false_positive_trap
+    input_name: "Apex Farms LLC"
+    expected_canonical: "Apex Farms"
+    requires_ma_registry: false
+    description: "TRAP: 'Apex Farms' is NOT 'Apex Manufacturing' — must stay separate"
+
+  - id: EX-402
+    difficulty: 4
+    category: false_positive_trap
+    input_name: "Apex Fabrication Services"
+    expected_canonical: "Apex Fabrication"
+    requires_ma_registry: false
+    description: "TRAP: 'Apex Fabrication' is NOT 'Apex Manufacturing' — different company"
+
+  - id: EX-403
+    difficulty: 4
+    category: false_positive_trap
+    input_name: "Stellar Dynamics Inc"
+    expected_canonical: "Stellar Dynamics Inc"
+    requires_ma_registry: false
+    description: "TRAP: 'Stellar Dynamics' is NOT 'Stellar Metalworks' — unrelated company"
+
+  - id: EX-404
+    difficulty: 4
+    category: false_positive_trap
+    input_name: "AeroTech Systems"
+    expected_canonical: "AeroTech Systems"
+    requires_ma_registry: false
+    description: "TRAP: 'AeroTech' is NOT 'AeroFlow' — different company despite similar pattern"
+
+  # --- Rebrand with additional noise ---
+  - id: EX-405
+    difficulty: 4
+    category: full_rebrand
+    input_name: "ZENITH THERMAL SOLUTIONS INC."
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: true
+    ma_event: "ma-e17890"
+    description: "Rebranded name in all caps with legal suffix"
+
+  - id: EX-406
+    difficulty: 4
+    category: full_rebrand
+    input_name: "Zenith Therm. Sol."
+    expected_canonical: "Precision Thermal Co"
+    requires_ma_registry: true
+    ma_event: "ma-e17890"
+    description: "Abbreviated rebrand name — extremely hard"
+
+  # --- Acquisition acronyms with variations ---
+  - id: EX-407
+    difficulty: 4
+    category: acronym_rebrand
+    input_name: "A.Q.F. Holdings"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Dotted acronym of acquisition entity"
+
+  - id: EX-408
+    difficulty: 4
+    category: acronym_rebrand
+    input_name: "AQF Holdings LLC"
+    expected_canonical: "Apex Manufacturing"
+    requires_ma_registry: true
+    ma_event: "ma-1c52b8"
+    description: "Acronym with added legal suffix"
+
+  # --- Completely unknown companies (should remain unresolved) ---
+  - id: EX-409
+    difficulty: 4
+    category: unknown
+    input_name: "Pacific Northwest Fabricators"
+    expected_canonical: "Pacific Northwest Fabricators"
+    requires_ma_registry: false
+    description: "Completely unknown company — should NOT resolve to any existing entity"
+
+  - id: EX-410
+    difficulty: 4
+    category: unknown
+    input_name: "Global Industrial Supply Co"
+    expected_canonical: "Global Industrial Supply Co"
+    requires_ma_registry: false
+    description: "Unknown company with common industrial terms — must not false-match"
+
+  - id: EX-411
+    difficulty: 4
+    category: unknown
+    input_name: "Summit Manufacturing LLC"
+    expected_canonical: "Summit Manufacturing LLC"
+    requires_ma_registry: false
+    description: "TRAP: Contains 'Manufacturing' like Apex but is a different company entirely"
+
+  # --- Ambiguous multi-match scenarios ---
+  - id: EX-412
+    difficulty: 4
+    category: ambiguous
+    input_name: "Apex Industries"
+    expected_canonical: "AMBIGUOUS"
+    requires_ma_registry: false
+    description: "Could be Apex Manufacturing, Apex Farms, or Apex Fabrication — system should flag ambiguity"
+
+  - id: EX-413
+    difficulty: 4
+    category: ambiguous
+    input_name: "Stellar Industries"
+    expected_canonical: "AMBIGUOUS"
+    requires_ma_registry: false
+    description: "Could be Stellar Metalworks or unrelated — insufficient info to resolve"
