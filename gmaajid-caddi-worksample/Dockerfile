@@ -2,24 +2,25 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install build dependencies for sentence-transformers
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential && \
-    rm -rf /var/lib/apt/lists/*
-
-COPY pyproject.toml .
+# Copy project files
+COPY pyproject.toml caddi-cli ./
 COPY rag/ rag/
-COPY data/ data/
-COPY docs/ docs/
+COPY src/ src/
 COPY config/ config/
+COPY data/ data/
+COPY web/ web/
+COPY docs/ docs/
 
-RUN pip install --no-cache-dir -e .
+# Make caddi-cli executable
+RUN chmod +x caddi-cli
 
-# Pre-download the embedding model so it's baked into the image
+# Install dependencies
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# Pre-download the embedding model (cached in image layer)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-# Ingest data at build time
-RUN rag ingest --data-dir data/ --knowledge-dir docs/knowledge/
+EXPOSE 8080
 
-ENTRYPOINT ["rag"]
-CMD ["chat"]
+ENTRYPOINT ["./caddi-cli"]
+CMD ["--help"]
