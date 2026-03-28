@@ -1,0 +1,41 @@
+#tutorial-list { padding: 20px; max-width: 800px; margin: 0 auto; }
+#tutorial-list h2 { margin-bottom: 12px; color: #e2e8f0; }
+#tutorial-list p { color: #94a3b8; font-size: 13px; margin-bottom: 20px; }
+.tutorial-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: border-color 0.2s; }
+.tutorial-card:hover { border-color: #38bdf8; }
+.tutorial-card h4 { color: #38bdf8; margin-bottom: 6px; font-size: 14px; }
+.tutorial-card p { color: #94a3b8; font-size: 13px; margin: 0; }
+.tutorial-card .tier { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-bottom: 6px; }
+.tier-1 { background: #166534; color: #86efac; }
+.tier-2 { background: #854d0e; color: #fde047; }
+.tier-3 { background: #9a3412; color: #fdba74; }
+.tier-4 { background: #881337; color: #fda4af; }
+.tier-0 { background: #334155; color: #94a3b8; }
+#tutorial-player { padding: 20px; max-width: 800px; margin: 0 auto; }
+#tutorial-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+#tutorial-back { background: none; border: 1px solid #475569; color: #94a3b8; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#tutorial-title { flex: 1; font-size: 16px; color: #e2e8f0; }
+#tutorial-mode-toggle { display: flex; gap: 2px; }
+.mode-btn { background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+.mode-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+#tutorial-step-content { background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+#step-title { color: #38bdf8; margin-bottom: 8px; }
+#step-narrative { color: #cbd5e1; font-size: 14px; line-height: 1.6; }
+#step-command { margin-top: 12px; background: #0f172a; border-radius: 4px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+#step-command code { color: #22c55e; font-size: 13px; }
+#step-command-copy { background: none; border: 1px solid #475569; color: #94a3b8; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+#step-note { margin-top: 8px; color: #94a3b8; font-size: 12px; font-style: italic; }
+#tutorial-nav { display: flex; align-items: center; justify-content: space-between; }
+#tutorial-nav button { background: none; border: 1px solid #475569; color: #94a3b8; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+#tutorial-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+#tutorial-nav button:hover:not(:disabled) { border-color: #38bdf8; color: #38bdf8; }
+#tutorial-progress { color: #64748b; font-size: 13px; }
+#alerts-list { padding: 20px; }
+#alerts-list h2 { margin-bottom: 12px; }
+.alert-card { background: #1e293b; border-left: 4px solid; border-radius: 4px; padding: 12px; margin-bottom: 8px; }
+.alert-card.error { border-color: #ef4444; }
+.alert-card.warning { border-color: #f59e0b; }
+.alert-card.info { border-color: #38bdf8; }
+.alert-card .alert-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
+.alert-card .alert-message { font-size: 13px; color: #e2e8f0; }
+.alert-card .alert-action { color: #94a3b8; font-size: 12px; margin-top: 4px; }

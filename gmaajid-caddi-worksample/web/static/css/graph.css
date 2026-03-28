@@ -1,0 +1,27 @@
+#graph { width: 100%; height: 100%; }
+.node circle { stroke-width: 2px; cursor: pointer; transition: stroke-width 0.2s; }
+.node text { font-size: 10px; fill: #cbd5e1; pointer-events: none; }
+.node.canonical circle { fill: #38bdf8; stroke: #7dd3fc; }
+.node.variant circle { fill: #64748b; stroke: #94a3b8; }
+.node.ma-resulting circle { fill: #f59e0b; stroke: #fbbf24; }
+.node.division circle { fill: #a78bfa; stroke: #c4b5fd; }
+.node.highlighted circle { stroke: #f472b6; stroke-width: 4px; }
+.node.trace-start circle { stroke: #f59e0b; stroke-width: 4px; animation: pulse-amber 1s ease-in-out; }
+.node.trace-resolved circle { stroke: #22c55e; stroke-width: 4px; animation: pulse-green 1s ease-in-out; }
+.edge { fill: none; stroke-opacity: 0.5; }
+.edge.clustering { stroke: #22c55e; }
+.edge.ma { stroke: #f59e0b; stroke-dasharray: 6 3; }
+.edge.division { stroke: #a78bfa; stroke-width: 1.5; }
+.edge.highlighted { stroke-opacity: 1; stroke-width: 3px; }
+.edge.trace-active { stroke-opacity: 1; stroke-width: 3px; }
+.edge-label { font-size: 9px; fill: #94a3b8; pointer-events: none; }
+.edge-label.hidden { display: none; }
+.trace-particle { fill: #f59e0b; }
+@keyframes pulse-amber { 0%, 100% { filter: drop-shadow(0 0 4px #f59e0b); } 50% { filter: drop-shadow(0 0 12px #f59e0b); } }
+@keyframes pulse-green { 0%, 100% { filter: drop-shadow(0 0 4px #22c55e); } 50% { filter: drop-shadow(0 0 12px #22c55e); } }
+.node-entering { animation: fade-in 0.5s ease-out; }
+.node-exiting { animation: fade-out 0.3s ease-in forwards; }
+.edge-entering { animation: draw-edge 0.4s ease-out; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes draw-edge { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }

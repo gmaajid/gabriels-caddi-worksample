@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CADDi Supply Chain — Entity Graph</title>
+    <title>CADDi Supply Chain — Entity Resolution</title>
+    <link rel="stylesheet" href="/static/lib/xterm.css">
     <link rel="stylesheet" href="/static/css/style.css">
-    <script src="/static/lib/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/css/graph.css">
+    <link rel="stylesheet" href="/static/css/terminal.css">
+    <link rel="stylesheet" href="/static/css/tutorial.css">
 </head>
 <body>
     <div id="app">
@@ -19,49 +22,83 @@
         </nav>
         <div id="main">
             <div id="sidebar">
-                <div id="filters" class="sidebar-section">
+                <div class="sidebar-section">
                     <h3>Filters</h3>
-                    <label>Source:
-                        <select id="source-filter">
-                            <option value="all">All</option>
-                            <option value="clustering">Clustering</option>
-                            <option value="ma">M&A Registry</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="division">Division</option>
-                        </select>
-                    </label>
-                    <label>Search:
-                        <input id="search" type="text" placeholder="Type a name...">
-                    </label>
+                    <label>Source: <select id="source-filter">
+                        <option value="all">All</option>
+                        <option value="clustering">Clustering</option>
+                        <option value="ma">M&amp;A Registry</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="division">Division</option>
+                    </select></label>
+                    <label>Search: <input id="search" type="text" placeholder="Type a name..."></label>
+                    <label class="checkbox-label"><input type="checkbox" id="show-weights"> Show Edge Weights</label>
                 </div>
-                <div id="detail-panel" class="sidebar-section">
+                <div class="sidebar-section">
                     <h3>Details</h3>
                     <div id="detail-content"><em>Click a node or edge</em></div>
                 </div>
-                <div id="legend" class="sidebar-section">
+                <div class="sidebar-section">
                     <h3>Legend</h3>
                     <div class="legend-item"><span class="dot canonical"></span> Canonical</div>
                     <div class="legend-item"><span class="dot variant"></span> Variant</div>
-                    <div class="legend-item"><span class="dot ma-resulting"></span> M&A Result</div>
+                    <div class="legend-item"><span class="dot ma-resulting"></span> M&amp;A Result</div>
                     <div class="legend-item"><span class="dot division"></span> Division</div>
-                    <div class="legend-item"><span class="line clustering"></span> Clustering</div>
-                    <div class="legend-item"><span class="line ma-edge"></span> M&A Event</div>
-                    <div class="legend-item"><span class="line division-edge"></span> Division</div>
+                    <div class="legend-item"><span class="line clustering-line"></span> Clustering</div>
+                    <div class="legend-item"><span class="line ma-line"></span> M&amp;A Event</div>
+                    <div class="legend-item"><span class="line division-line"></span> Division</div>
                 </div>
             </div>
-            <div id="content">
+            <div id="content-area">
                 <div id="graph-view" class="view active">
+                    <div id="diff-banner"></div>
                     <svg id="graph"></svg>
                 </div>
                 <div id="tutorials-view" class="view">
                     <div id="tutorial-list"></div>
+                    <div id="tutorial-player" style="display:none">
+                        <div id="tutorial-header">
+                            <button id="tutorial-back">&#8592; Back</button>
+                            <span id="tutorial-title"></span>
+                            <div id="tutorial-mode-toggle">
+                                <button class="mode-btn active" data-mode="animated">Animated</button>
+                                <button class="mode-btn" data-mode="terminal">Terminal</button>
+                            </div>
+                        </div>
+                        <div id="tutorial-step-content">
+                            <h4 id="step-title"></h4>
+                            <p id="step-narrative"></p>
+                            <div id="step-command" style="display:none">
+                                <code id="step-command-text"></code>
+                                <button id="step-command-copy">Copy</button>
+                            </div>
+                            <div id="step-note" style="display:none"></div>
+                        </div>
+                        <div id="tutorial-nav">
+                            <button id="tutorial-prev" disabled>&#8592; Previous</button>
+                            <span id="tutorial-progress">1 / 4</span>
+                            <button id="tutorial-next">Next &#8594;</button>
+                        </div>
+                    </div>
                 </div>
                 <div id="alerts-view" class="view">
                     <div id="alerts-list"></div>
                 </div>
             </div>
         </div>
+        <div id="resize-handle"></div>
+        <div id="terminal-panel">
+            <div id="terminal"></div>
+        </div>
+        <div id="status-bar">
+            <span id="status-text">connecting...</span>
+            <span id="status-graph"></span>
+            <span id="status-tutorial"></span>
+        </div>
     </div>
-    <script src="/static/js/graph.js"></script>
+    <script src="/static/lib/d3.v7.min.js"></script>
+    <script src="/static/lib/xterm.min.js"></script>
+    <script src="/static/lib/xterm-addon-fit.min.js"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
