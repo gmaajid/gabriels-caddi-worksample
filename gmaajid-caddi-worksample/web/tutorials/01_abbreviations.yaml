@@ -1,0 +1,25 @@
+id: "01_abbreviations"
+title: "Resolving Abbreviations"
+tier: 1
+description: "See how 'APEX MFG' maps to 'Apex Manufacturing' using abbreviation expansion."
+steps:
+  - step: 1
+    title: "The Problem"
+    narrative: "The same supplier appears with different name variants. 'APEX MFG', 'Apex Mfg', and 'Apex Manufacturing Inc' are all the same company."
+    highlight_nodes: ["Apex Manufacturing"]
+    zoom_to: "Apex Manufacturing"
+  - step: 2
+    title: "Abbreviation Expansion"
+    narrative: "The system expands 'MFG' to 'Manufacturing', strips 'Inc', normalizes case. This produces identical token sets."
+    highlight_nodes: ["APEX MFG", "Apex Mfg", "Apex Manufacturing Inc", "APEX Manufacturing Inc"]
+    zoom_to: "Apex Manufacturing"
+    command: "caddi-cli mappings"
+  - step: 3
+    title: "Confidence Scores"
+    narrative: "Each variant has a confidence score. J=Jaccard, E=Embedding, C=Combined. Toggle 'Show Edge Weights' to see."
+    highlight_nodes: ["Apex Manufacturing"]
+    zoom_to: "Apex Manufacturing"
+  - step: 4
+    title: "Benchmark"
+    narrative: "All Tier 1 scenarios resolve with 100% accuracy."
+    command: "caddi-cli demo run --extended"

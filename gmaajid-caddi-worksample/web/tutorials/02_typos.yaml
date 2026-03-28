@@ -1,0 +1,18 @@
+id: "02_typos"
+title: "Handling Typos"
+tier: 2
+description: "Resolve misspelled supplier names using fuzzy token matching."
+steps:
+  - step: 1
+    title: "Typos in Data"
+    narrative: "'Stellr Metalworks', 'Titan Forge LLC', 'QuickFab Industires' — all need to resolve correctly."
+    highlight_nodes: ["Stellar Metalworks", "TitanForge LLC", "QuickFab Industries"]
+  - step: 2
+    title: "Fuzzy Matching"
+    narrative: "Levenshtein edit distance matches tokens with small differences. 'Stellr' matches 'Stellar' at 85% similarity."
+    highlight_nodes: ["Stellar Metalworks"]
+    zoom_to: "Stellar Metalworks"
+  - step: 3
+    title: "Results"
+    narrative: "Tier 2 achieves 89% F1. Remaining 11% are heavily corrupted names that correctly go to human review."
+    command: "caddi-cli demo run --extended"

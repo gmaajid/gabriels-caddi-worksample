@@ -1,0 +1,39 @@
+id: "03_acquisition"
+title: "Post-Acquisition Resolution"
+tier: 3
+description: "How the system resolves names after Apex acquired QuickFab."
+steps:
+  - step: 1
+    title: "The Acquisition"
+    narrative: "In July 2024, Apex Manufacturing acquired QuickFab Industries. Orders now appear as 'Apex-QuickFab Industries' and 'AQF Holdings'."
+    highlight_nodes: ["Apex Manufacturing", "QuickFab Industries"]
+    zoom_to: "Apex Manufacturing"
+  - step: 2
+    title: "M&A Registry"
+    narrative: "The registry records corporate events with dates."
+    highlight_nodes: ["Apex Manufacturing"]
+    zoom_to: "Apex Manufacturing"
+    command: "caddi-cli ma list"
+  - step: 3
+    title: "Chain Traversal"
+    narrative: "Watch 'AQF Holdings' resolve to 'Apex Manufacturing' through the M&A chain."
+    resolution_trace:
+      input: "AQF Holdings"
+      chain:
+        - node: "AQF Holdings"
+          action: "start"
+          delay_ms: 0
+        - edge: "AQF Holdings -> Apex Manufacturing"
+          type: "ma"
+          weight: 1.0
+          delay_ms: 800
+        - node: "Apex Manufacturing"
+          action: "resolved"
+          delay_ms: 1600
+    highlight_nodes: ["AQF Holdings", "Apex Manufacturing"]
+    zoom_to: "AQF Holdings"
+  - step: 4
+    title: "Date Awareness"
+    narrative: "An order for 'AQF Holdings' dated before July 2024 would NOT resolve — that name didn't exist yet."
+    highlight_nodes: ["AQF Holdings"]
+    zoom_to: "AQF Holdings"

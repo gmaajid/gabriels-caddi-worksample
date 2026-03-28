@@ -1,0 +1,20 @@
+id: "05_broken_chains"
+title: "Detecting Broken Chains"
+tier: 0
+description: "What happens when M&A data is incomplete."
+steps:
+  - step: 1
+    title: "Current State"
+    narrative: "The registry is healthy — no validation issues."
+    command: "caddi-cli ma validate"
+  - step: 2
+    title: "Simulate a Gap"
+    narrative: "Remove the QuickFab acquisition event to see what happens."
+    note: "Run: caddi-cli ma list (find the acquisition event ID), then: caddi-cli ma remove <id> --force"
+  - step: 3
+    title: "The Break"
+    narrative: "Without the event, 'AQF Holdings' becomes unresolved. The system flags a broken chain."
+  - step: 4
+    title: "Recovery"
+    narrative: "Add the event back to restore the chain."
+    note: "Run: caddi-cli ma add --type acquisition --date 2024-07-15 --acquirer 'Apex Manufacturing' --acquired 'QuickFab Industries' --resulting-name 'AQF Holdings'"

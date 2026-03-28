@@ -1,0 +1,32 @@
+id: "04_rebrand"
+title: "Complete Rebrand (Zero Overlap)"
+tier: 4
+description: "'Zenith Thermal Solutions' has ZERO overlap with 'Precision Thermal Co'. Only the M&A registry can solve this."
+steps:
+  - step: 1
+    title: "The Challenge"
+    narrative: "Precision Thermal rebranded to 'Zenith Thermal Solutions' in Jan 2025. Zero token overlap. Clustering scores near zero."
+    highlight_nodes: ["Precision Thermal Co"]
+    zoom_to: "Precision Thermal Co"
+  - step: 2
+    title: "M&A Resolution"
+    narrative: "The registry records the rebrand. Watch the chain traversal."
+    resolution_trace:
+      input: "Zenith Thermal Solutions"
+      chain:
+        - node: "Zenith Thermal Solutions"
+          action: "start"
+          delay_ms: 0
+        - edge: "Zenith Thermal Solutions -> Precision Thermal Co"
+          type: "ma"
+          weight: 1.0
+          delay_ms: 800
+        - node: "Precision Thermal Co"
+          action: "resolved"
+          delay_ms: 1600
+    highlight_nodes: ["Zenith Thermal Solutions", "Precision Thermal Co"]
+    zoom_to: "Zenith Thermal Solutions"
+  - step: 3
+    title: "Transparency"
+    narrative: "Without the registry entry, recall is 0%. Tier 4 scores show where your registry has gaps."
+    command: "caddi-cli demo run --extended"

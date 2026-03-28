@@ -1,0 +1,21 @@
+id: "06_divisions"
+title: "Divisions vs Acquisitions"
+tier: 0
+description: "Divisions keep their own identity for POs. The parent relationship is tracked separately."
+steps:
+  - step: 1
+    title: "Division Structure"
+    narrative: "Apex has three divisions: Bright Star Foundrys, Juniper Racing Parts, Knight Fastener."
+    highlight_nodes: ["Bright Star Foundrys", "Juniper Racing Parts", "Knight Fastener Fabrication Services", "Apex Manufacturing"]
+    zoom_to: "Apex Manufacturing"
+  - step: 2
+    title: "Independent Identity"
+    narrative: "POs from 'Bright Star Foundrys' resolve to 'Bright Star Foundrys', NOT 'Apex Manufacturing'."
+    highlight_nodes: ["Bright Star Foundrys"]
+    zoom_to: "Bright Star Foundrys"
+  - step: 3
+    title: "Parent Link"
+    narrative: "The purple edge shows the parent relationship. Analytics can aggregate at the family level."
+    highlight_edges: ["division"]
+    zoom_to: "Apex Manufacturing"
+    command: "caddi-cli ma list"
