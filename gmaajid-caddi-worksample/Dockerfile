@@ -23,4 +23,4 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 EXPOSE 8080
 
 ENTRYPOINT ["./caddi-cli"]
-CMD ["--help"]
+CMD ["viz", "--no-browser"]
