@@ -738,14 +738,14 @@ WORKDIR /app
 COPY . .
 RUN pip install -e ".[dev]" && \
     python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-EXPOSE 8080
+EXPOSE 8095
 ENTRYPOINT ["./caddi-cli"]
 ```
 
 Key points:
 - **Embedding model pre-downloaded** at build time (no internet needed at runtime)
 - **ChromaDB is in-process** (no external database)
-- **Web visualization served** via built-in Python HTTP server on port 8080
+- **Web visualization served** via built-in Python HTTP server on port 8095
 - **ANTHROPIC_API_KEY** is optional — RAG queries work without it (raw mode)
 
 ### 10.2 Interviewer Quick Start
@@ -757,13 +757,13 @@ cd gabriels-caddi-worksample
 
 # Option A: Docker (no Python needed)
 docker build -t caddi-demo .
-docker run -it -p 8080:8080 caddi-demo demo run
+docker run -it -p 8095:8095 caddi-demo demo run
 
 # Option B: Local (Python 3.12+)
 make setup
 ./caddi-cli ingest
 ./caddi-cli demo run
-./caddi-cli viz              # opens browser to localhost:8080
+./caddi-cli viz              # opens browser to localhost:8095
 ```
 
 ### 10.3 What's in the Image

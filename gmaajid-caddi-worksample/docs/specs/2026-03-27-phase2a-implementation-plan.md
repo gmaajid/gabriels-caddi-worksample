@@ -1332,7 +1332,7 @@ Find the `viz` function in `rag/cli.py` and replace the implementation:
 
 ```python
 @cli.command()
-@click.option("--port", default=8080, help="Port for the web server")
+@click.option("--port", default=8095, help="Port for the web server")
 @click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
 def viz(port, no_browser):
     """Launch the interactive web application.
@@ -1414,7 +1414,7 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # Pre-download the embedding model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-EXPOSE 8080
+EXPOSE 8095
 
 ENTRYPOINT ["./caddi-cli"]
 CMD ["viz", "--no-browser"]

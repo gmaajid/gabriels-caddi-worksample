@@ -1284,7 +1284,7 @@ def demo_run(extended):
 
 
 @cli.command()
-@click.option("--port", default=8080, help="Port for the web server")
+@click.option("--port", default=8095, help="Port for the web server")
 @click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
 def viz(port, no_browser):
     """Launch the interactive web application.

@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # Pre-download the embedding model (cached in image layer)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-EXPOSE 8080
+EXPOSE 8095
 
 ENTRYPOINT ["./caddi-cli"]
 CMD ["viz", "--no-browser"]

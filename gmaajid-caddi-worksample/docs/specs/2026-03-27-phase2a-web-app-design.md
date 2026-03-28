@@ -469,7 +469,7 @@ uvicorn.run("web.server:app", host="0.0.0.0", port=port)
 
 Docker runs:
 ```bash
-docker run -it -p 8080:8080 caddi-demo viz
+docker run -it -p 8095:8095 caddi-demo viz
 ```
 
 Everything else unchanged — single image, no external services.

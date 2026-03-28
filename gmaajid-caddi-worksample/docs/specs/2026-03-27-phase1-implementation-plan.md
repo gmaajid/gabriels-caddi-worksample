@@ -2179,7 +2179,7 @@ Add to `rag/cli.py`:
 
 ```python
 @cli.command()
-@click.option("--port", default=8080, help="Port for the web server")
+@click.option("--port", default=8095, help="Port for the web server")
 @click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
 def viz(port, no_browser):
     """Launch the web visualization of the entity graph.
@@ -2365,7 +2365,7 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # Pre-download the embedding model so it's cached in the image
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-EXPOSE 8080
+EXPOSE 8095
 
 ENTRYPOINT ["./caddi-cli"]
 CMD ["--help"]
@@ -2377,7 +2377,7 @@ CMD ["--help"]
 docker build -t caddi-demo .
 docker run --rm caddi-demo --help
 docker run --rm caddi-demo ma list
-docker run --rm -p 8080:8080 caddi-demo viz --no-browser
+docker run --rm -p 8095:8095 caddi-demo viz --no-browser
 ```
 
 - [ ] **Step 3: Commit**
