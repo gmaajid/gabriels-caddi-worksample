@@ -1287,58 +1287,29 @@ def demo_run(extended):
 @click.option("--port", default=8080, help="Port for the web server")
 @click.option("--no-browser", is_flag=True, help="Don't auto-open browser")
 def viz(port, no_browser):
-    """Launch the web visualization of the entity graph.
+    """Launch the interactive web application.
 
-    Starts a local web server serving the interactive D3.js graph.
-    Shows supplier name relationships, confidence scores, M&A chains,
-    and guided tutorials.
+    Starts the FastAPI server with embedded terminal, interactive
+    graph visualization, and guided tutorials.
 
     Example:
         caddi-cli viz
         caddi-cli viz --port 9090
         caddi-cli viz --no-browser
     """
-    import http.server
-    import json
     import threading
     import webbrowser
+    import uvicorn
+    from web.server import create_app
 
-    from rag.config import WEB_DIR
-
-    # Build graph data
-    graph_data = _build_viz_data()
-
-    class GraphHandler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(WEB_DIR), **kwargs)
-
-        def do_GET(self):
-            if self.path == "/api/graph":
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(json.dumps(graph_data).encode())
-            else:
-                super().do_GET()
-
-        def log_message(self, format, *args):
-            pass  # Suppress request logs
-
-    console.print(f"[green]Starting visualization server on port {port}...[/green]")
-    console.print(f"  Graph: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges")
-    console.print(f"  Alerts: {len(graph_data.get('alerts', []))}")
+    console.print(f"[green]Starting CADDi web application on port {port}...[/green]")
     console.print(f"\n  Open: [bold cyan]http://localhost:{port}[/bold cyan]")
     console.print("  Press Ctrl+C to stop.\n")
 
     if not no_browser:
-        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+        threading.Timer(2.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
 
-    server = http.server.HTTPServer(("", port), GraphHandler)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        console.print("\n[dim]Server stopped.[/dim]")
+    uvicorn.run(create_app(), host="0.0.0.0", port=port, log_level="warning")
 
 
 def _build_viz_data():
